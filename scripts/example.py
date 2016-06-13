@@ -1,6 +1,9 @@
-BASE = "/mongoc/mmayers/N15-Samples/"
+BASE = "../data"
 
-from metaproteomics import utils
+import sys
+sys.path.append('..')
+
+from scripts import utils
 import os
 import pandas as pd
 from itertools import chain
@@ -12,8 +15,8 @@ from sklearn import preprocessing
 from collections import Counter
 from collections import defaultdict
 
-from metaproteomics.analysis import build_loci
-from metaproteomics.analysis.DBInfo import DBInfo
+from scripts.analysis import build_loci
+from scripts.analysis.DBInfo import DBInfo
 
 db_info = DBInfo("compil_mgm")
 metadata = build_loci.read_metadata(os.path.join(BASE,"metadata.csv"))
@@ -30,7 +33,7 @@ protein_clusters = shelve.open(os.path.join(BASE,"protein_clusters.shelve"))
 for name,sample in samples.items():
     protein_clusters[name] = sample.build_protein_clusters()
 
-"""f
+"""
 grouped_loci = build_loci.group_across_samples(list(chain(*protein_clusters.values())), db_info)
 for locus in tqdm(grouped_loci):
     locus.annotate()
