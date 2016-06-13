@@ -1,0 +1,6 @@
+#!/bin/bash
+
+python3 ../scripts/dtaselect_QC.py dta-pfp-0.01
+python3 ../scripts/dtaselect_QC.py dta-pfp-0.01
+python3 ../scripts/xcorr_deltcn_plot.py
+python3 ../scripts/xcorr_deltcn_plot.py n15_search
