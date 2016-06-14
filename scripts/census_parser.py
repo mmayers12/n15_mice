@@ -219,7 +219,7 @@ def prep_for_pca2(df_list, name = 'Unenr', clean = False):
     return pd.concat(dats)
 
 
-def plot_pca(df, out = 'pca_plot', loc = 'best', labels = False):
+def plot_pca(df, loc = 'best', labels = False, save = False, out = 'pca_plot'):
     """
     Given a df with samples
     """
@@ -266,8 +266,9 @@ def plot_pca(df, out = 'pca_plot', loc = 'best', labels = False):
     plt.ylabel("PC{0}: {1:.2f}%".format(PLOT_PCS[1], pca.explained_variance_ratio_[PLOT_PCS[1]-1]*100))
 
     fig.set_tight_layout(False)
-    fig.savefig(os.path.join(BASE, out + ".png"))
-    fig.savefig(os.path.join(BASE, out + ".pdf"))
+    if save:
+        fig.savefig(os.path.join(BASE, out + ".png"))
+        fig.savefig(os.path.join(BASE, out + ".pdf"))
 
 def clean_pca_df(df, verbose = True):
     """
