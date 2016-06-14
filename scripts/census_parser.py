@@ -247,7 +247,7 @@ def plot_pca(df, out = 'pca_plot', loc = 'best', labels = False):
     ax = fig.add_subplot(111)
     groups = np.unique(list(metadata.loc[GROUP]))
     num_colors = len(groups)
-    cm = plt.get_cmap("Set1")
+    cm = plt.get_cmap("Paired")
     colors = [cm(1.*i/num_colors) for i in range(num_colors)]
 
     for i,group in enumerate(groups):
@@ -277,5 +277,5 @@ def clean_pca_df(df, verbose = True):
         print('Starting peptides: ', len(df.T))
     df = df.T.reset_index().T[2:].replace(np.log2(0), np.nan).dropna(axis = 1)
     if verbose:
-        print('Peptides afer Cleaning: ', len(df.T))
+        print('Peptides after Cleaning: ', len(df.T))
     return df
