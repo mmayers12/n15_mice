@@ -10,7 +10,7 @@ if __name__ == '__main__':
     matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from itertools import chain
-from metaproteomics.file_processing import blazmass_tools
+from . import blazmass_tools
 import numpy as np
 from collections import Counter
 import sys
@@ -20,20 +20,6 @@ def num_PSM_per_scan(dta_parser):
     num_PSM_per_scan = Counter({p["AA_Sequence"]:p['LCStep'] for p in chain(*[x['peptides'] for x in dta_parser])}.values())
     x,y = zip(*sorted(num_PSM_per_scan.items(), key = lambda x:x[0]))
     return x,y
-
-def get_lcstep(filename):
-    # Parse lc step out of filename
-    # failure to parse -> returns -1
-    split_on = '_'
-    if '-' in filename:
-        split_on = '-'
-    try:
-        lcstep = int(filename.split('.')[0].split(split_on)[-1])
-        if lcstep > 100:
-            lcstep = int(filename.split('.')[0].split(split_on)[-2])
-        return lcstep
-    except ValueError:
-        return -1
 
 def plot_hist(data, title, xlabel, ylabel, save=None):
     # save: folder to save plot in

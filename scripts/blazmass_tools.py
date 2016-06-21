@@ -6,6 +6,7 @@ DTASelect-filter.txt File Parser
 import re
 from itertools import chain
 from collections import defaultdict
+from .utils import get_lcstep, get_unmod_seq
 
 
 def get_peptides(dta_select, **kwargs):
@@ -182,40 +183,13 @@ def dta_select_parser(in_file, small=False, get_tax=False, check_peptides=False,
                 p['aa_sequence'] = re.findall('\.(.*)\.', p['Sequence'])[0]
                 p['is_modified'] = True if ')' in p['aa_sequence'] else False
                 if p['is_modified']:
-                    unmod_peptide = p['aa_sequence']
-                    diff_mass = 0
-                    mods = []
-                    for match in re.finditer('\((.*?)\)', p['aa_sequence']):
-                        mass = float(match.groups()[0])
-                        AA = p['aa_sequence'][match.span()[0] - 1]
-                        diff_mass += mass
-                        pos = unmod_peptide.index(match.group())  # 1-based
-                        mods.append((AA, pos, mass))
-                        unmod_peptide = unmod_peptide.replace(match.group(), '', 1)
-                    p['unmod_peptide'] = unmod_peptide
-                    p['diff_mass'] = diff_mass
-                    p['mods'] = mods
+                    seq, mods = get_unmod_seq(p['aa_sequence'])                 
+                    p.update(mods)
                 else:
                     p['unmod_peptide'] = p['aa_sequence']
 
                 # MudPIT salt step (chromatography method from Xcalibur)
-                '''To work with these
-                05282015_lysed_AW_0518_Phe3_4.1364.1364.2
-                05282015_lysed_AW_0518_Phe3_4_150529142251.1364.1364.2
-                20151113-unenriched-4a_s2.9125.9125.1
-                20151113-unenriched-4a_s1_151113145120.6839.6839.1
-                UnerFecal-C3-1016-s3.8590.8590.2
-                UnerFecal-C3-1016-s3_151113145120.8590.8590.2
-                '''
-                try:
-                    lcstep = re.split('_|-', p['FileName'].split('.')[0])[-1]
-                    if len(lcstep) > 3:
-                        lcstep = re.split('_|-', p['FileName'].split('.')[0])[-2]
-                    if lcstep[0] == 's' or lcstep[0] == 'S':
-                        lcstep = lcstep[1:]
-                    p['lc_step'] = int(lcstep)
-                except ValueError:
-                    p['lc_step'] = None
+                p['lc_step'] = get_lcstep(p['FileName'])
 
                 # Scan number from instrument (unique per salt step) - from MS2 / SQT file
                 p['scan'] = int(p['FileName'].split('.')[1])
