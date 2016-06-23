@@ -1,6 +1,6 @@
 import os
-
-
+import pandas as pd
+import numpy as np
 
 def strip_date(name):
     return '_'.join(name.split('-')[1:])
@@ -52,73 +52,84 @@ def make_name(name, N14 = True):
 
     return out_name
 
-def make_line(line, sample, N14 = True):
-    temp_line = ""
+def make_line(folder, sample, N14 = True):
+    line_d = dict()
     #name
-    temp_line += make_name(sample, N14) + ','
+    line_d['name'] = make_name(sample, N14)
     #sample_type
     if 'Lys' in sample:
-        temp_line += 'Lysate,'
+        line_d['sample_type'] = 'Lysate'
     else:
-        temp_line += 'Supernatant,'
+        line_d['sample_type'] = 'Supernatant'
     #Enriched & Type
     if "Uner" in sample:
-        temp_line += 'FALSE,N/A,'
+        line_d['enriched'] = False
+        line_d['probe'] = np.nan
     else:
-        temp_line += 'TRUE,'
+        line_d['enriched'] = True
         if 'AOMK' in sample:
-            temp_line += 'AOMK,'
+            line_d['probe'] = 'AOMK'
         if 'CMK' in sample:
-            temp_line += 'CMK,'
+            line_d['probe'] = 'CMK'
         if 'DMSO' in sample:
-            temp_line += 'DMSO,'
+            line_d['probe'] = 'DMSO'
     #Technical Rep #
-    temp_line += sample.split('_')[-1] + ','
+    line_d['technical'] = sample.split('_')[-1]
     #Collection Date
-    tmp = line.split('-')[-1]
+    tmp = folder.split('-')[-1]
     if tmp == 'Pool':
-        temp_line += '2015-11-18 2015-11-22,'
+        line_d['col_date'] = '2015-11-18 2015-11-22'
     else:
-        temp_line += '2015-' + tmp[:2] + '-' + tmp[2:] + ','
+        line_d['col_date'] = '2015-' + tmp[:2] + '-' + tmp[2:]
     #run date date
-    date = line.split('-')[0]
-    temp_line += date[:4] + '-' + date[4:6] + '-' + date[6:8] + ','
+    date = folder.split('-')[0]
+    line_d['run_date'] = date[:4] + '-' + date[4:6] + '-' + date[6:8]
     # N14 and path
     if N14:
-        temp_line += 'FALSE,'
-        temp_line += (line + "/rawXtractor/dta-pfp-0.01/DTASelect-filter.txt")
+        line_d['n15'] = False
+        line_d['path'] = (folder + "/rawXtractor/dta-pfp-0.01/DTASelect-filter.txt")
     else:
-        temp_line += 'TRUE,'
-        temp_line += (line + "/rawXtractor/n15_search/dta-pfp-0.01/DTASelect-filter.txt")
+        line_d['n15'] = True
+        line_d['path'] = (folder + "/rawXtractor/n15_search/dta-pfp-0.01/DTASelect-filter.txt")
+    # Determine if its an N14 N15 mix file for quant, and if so store paired DTA output
+    if 'N14N15' in folder:
+        line_d['quant'] = True
+        if line_d['n15']:
+            line_d['paired_file'] = folder + "/rawXtractor/dta-pfp-0.01/DTASelect-filter.txt"
+        else:
+            line_d['paired_file'] = folder + "/rawXtractor/n15_search/dta-pfp-0.01/DTASelect-filter.txt"
+    else:
+        line_d['quant'] = False
+        line_d['paired_file'] = np.nan
+    return line_d
+#%%
+def main():
+#%%list(map(strip_date, folders))
+    folders = sorted([x for x in os.listdir() if '201' in x])
+    samples = list(map(strip_date, folders))
+#%%
+    for sample in set(samples):
+        i = 1
+        while(sample in samples):
+            idx = samples.index(sample)
+            samples[idx] = samples[idx]+'_'+str(i)
+            i += 1
+    metadata = []
+#%%
+    for folder, sample in zip(folders, samples):
+        if 'N14' in sample:
+            metadata.append(make_line(folder,sample))
+        if 'N15' in sample:
+            ssplt = sample.split('_')
+            sample = '_'.join(ssplt[:-1]) + '_n15_' + ssplt[-1]
+            metadata.append(make_line(folder,sample, False))
 
-    return temp_line
+    #header = ',sample_type,enriched,probe,technical,col_date,run_date,n15,path'
 
+    metadata = pd.DataFrame(metadata)
+    metadata = metadata.set_index('name')
+    metadata.to_csv('metadata.csv', index_label = '')
 
-lines = sorted([x for x in os.listdir() if '201' in x])
-
-samples = list(map(strip_date, lines))
-
-for sample in set(samples):
-    i = 1
-    while(sample in samples):
-        idx = samples.index(sample)
-        samples[idx] = samples[idx]+'_'+str(i)
-        i += 1
-
-new_lines = []
-for i, line in enumerate(lines):
-    if 'N14' in line:
-        new_lines.append(make_line(line,samples[i]))
-    if 'N15' in line:
-        ssplt = samples[i].split('_')
-        samples[i] = '_'.join(ssplt[:-1]) + '_n15_' + ssplt[-1]
-        new_lines.append(make_line(line,samples[i], False))
-
-
-header = ',sample_type,enriched,probe,technical,col_date,run_date,n15,path'
-
-
-
-with open("metadata.csv", 'w') as f:
-    f.write(header + '\n')
-    f.write("\n".join(new_lines))
+ #%%
+if __name__ == '__main__':
+    main()
