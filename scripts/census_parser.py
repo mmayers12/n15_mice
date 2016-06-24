@@ -93,18 +93,24 @@ def parse_file(fname, heavy = False, norm = False):
         .reset_index()
     )
 
-    s_table = pd.concat([s_table, sand_table])
+    s_table = pd.concat([s_table, sand_table]).reset_index(drop=True)
 
+    # Add a column 'aa_sequence' without the leading and trailing Residues
+    s_table['aa_sequence'] = s_table['sequence'].str.split('.').apply(lambda x: '.'.join(x[1:-1]))
+
+
+    # Add N14 or N15 tag depending on source
     if heavy:
         s_table['source'] = 'n15'
     else:
         s_table['source'] = 'n14'
 
+    # Use the correction factor to get corrected integrations
     s_table['sam_int_corr'] = (s_table['sam_int'] * get_corrval(fname)).astype(int)
     for col in ['sam_int', 'ref_int', 'peak_int']:
         s_table[col] = s_table[col].astype(int)
-
     for integration in ['sam_int_corr', 'ref_int', 'peak_int']:
+        # Convert integrations to standard normal if passed through        
         if norm:
             s_table['log_{}'.format(integration)] = norm_integrations(s_table[integration])            
         else:
@@ -161,17 +167,24 @@ def prep_for_pca(df_list, name = 'Unenr', clean = True):
     each row as a sample, and the values are the peak integrations
     """
 
-
     dats = []
-
+    
     for i, dfs in enumerate(df_list):
-        dats.append((dfs[0]
-        .groupby(['sequence', 'cs'])
-        .mean()[['log_sam_int_corr', 'log_ref_int']]
-        .combine_first(dfs[1].groupby(['sequence', 'cs'])
-        .mean()[['log_sam_int_corr', 'log_ref_int']])
-        ).rename(columns={'log_sam_int_corr':'{}_n14_{}'.format(name, i+1), 'log_ref_int': '{}_n15_{}'.format(name, i+1)})
-        .T)
+        # Get Values from Light sample first, then fill in missing values from heavy sample        
+        tmp = dfs[0].drop_duplicates(['aa_sequence', 'cs'])
+        tmp = tmp.set_index(tmp.aa_sequence + '.' + tmp.cs.astype(str), drop = True)[['log_sam_int_corr', 'log_ref_int']]
+
+        tmp1 = dfs[1].drop_duplicates(['aa_sequence', 'cs'])
+        tmp1 = tmp1.set_index(tmp1.aa_sequence + '.' + tmp1.cs.astype(str), drop = True)[['log_sam_int_corr', 'log_ref_int']]
+
+        # Update only missing values from 1 with vals from 2
+        tmp = tmp.combine_first(tmp1)
+
+        #Rename columns to correspond to the sample sam_int = light pep, ref_int = heavy pep
+        tmp = tmp.rename(columns={'log_sam_int_corr':'{}_n14_{}'.format(name, i+1), 'log_ref_int': '{}_n15_{}'.format(name, i+1)})
+
+        # Add transposed dataframe
+        dats.append(tmp.T)
 
     if clean:
         return clean_pca_df(pd.concat(dats))
@@ -276,7 +289,7 @@ def clean_pca_df(df, verbose = True):
     """
     if verbose:
         print('Starting peptides: ', len(df.T))
-    df = df.T.reset_index().T[2:].replace(np.log2(0), np.nan).dropna(axis = 1)
+    df = df.replace(np.log2(0), np.nan).dropna(axis = 1)
     if verbose:
         print('Peptides after Cleaning: ', len(df.T))
     return df
