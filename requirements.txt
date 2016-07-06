@@ -39,6 +39,7 @@ seaborn==0.7.1
 simplegeneric==0.8.1
 six==1.10.0
 sklearn==0.0
+tailer==0.4.1
 terminado==0.6
 tornado==4.3
 tqdm==4.7.4
