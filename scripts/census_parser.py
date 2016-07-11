@@ -48,9 +48,11 @@ def get_corrval(fname):
             return math.exp(float(head[1]))
     return 1
 
-def parse_file(fname, heavy = False, norm = False):
+def parse_file(fname, norm = True):
     """Read through the original file, split into P and S files"""
 
+    import math
+    
     colnames = get_colnames(fname)
 
     p_out, s_out, sand_out = [], [], []
@@ -98,23 +100,43 @@ def parse_file(fname, heavy = False, norm = False):
     # Add a column 'aa_sequence' without the leading and trailing Residues
     s_table['aa_sequence'] = s_table['sequence'].str.split('.').apply(lambda x: '.'.join(x[1:-1]))
 
+    # Add a boolean to show the source of the protein
+    s_table['n15'] = s_table['file_name'].str.contains('n15')
+    
+    # Get the correction Factor (-median of the log of the peptide ratios)
+    corr_factor = -1*(np.log(s_table
+                             .drop_duplicates(subset=['cs', 'aa_sequence'])['ratio']    
+                             .replace(0, np.nan))
+                      .dropna()
+                      .median())
+    
+    # Multiply by the correction factor to get the new 
+    s_table['sam_int_corr'] = (s_table['sam_int'] * math.exp(corr_factor)).astype(int)
 
-    # Add N14 or N15 tag depending on source
-    if heavy:
-        s_table['source'] = 'n15'
-    else:
-        s_table['source'] = 'n14'
 
-    # Use the correction factor to get corrected integrations
-    s_table['sam_int_corr'] = (s_table['sam_int'] * get_corrval(fname)).astype(int)
+    #Normilazaion routine
+    # ratios are multiplied by math.exp(corr_factor)
+    # reverse ratios are divided by math.exp(corr_factor)
+    if norm:    
+        s_ratios = ['ratio', 'area_ratio']
+        s_rev_ratios = ['rev_slope_ratio']
+        
+        s_table[s_ratios] = s_table[s_ratios].apply(lambda c: c * math.exp(corr_factor))
+        s_table[s_rev_ratios] = s_table[s_rev_ratios].apply(lambda c: c / math.exp(corr_factor))
+        
+        p_ratios = ['average_ratio', 'standard_deviation', 'composite_ratio', 'weighted_average', 'log_inv_average']
+        p_rev_ratios = ['average_ratio_rev', 'standard_deviation_rev', 'log_inv_average_rev']
+
+        p_table[p_ratios] = p_table[p_ratios].apply(lambda c: c * math.exp(corr_factor))        
+        p_table[p_rev_ratios] = p_table[p_rev_ratios].apply(lambda c: c / math.exp(corr_factor))
+        
+    
     for col in ['sam_int', 'ref_int', 'peak_int']:
         s_table[col] = s_table[col].astype(int)
+
     for integration in ['sam_int_corr', 'ref_int', 'peak_int']:
-        # Convert integrations to standard normal if passed through        
-        if norm:
-            s_table['log_{}'.format(integration)] = norm_integrations(s_table[integration])            
-        else:
-            s_table['log_{}'.format(integration)] = np.log2(s_table[integration])            
+        s_table['log_{}'.format(integration)] = np.log2(s_table[integration])            
+
 
     return (p_table, s_table)
 
@@ -185,47 +207,6 @@ def prep_for_pca(df_list, name = 'Unenr', clean = True):
 
         # Add transposed dataframe
         dats.append(tmp.T)
-
-    if clean:
-        return clean_pca_df(pd.concat(dats))
-    return pd.concat(dats)
-
-
-
-def prep_for_pca2(df_list, name = 'Unenr', clean = False):
-    """
-    Returns same DF as prep for pca, however
-    for Singletons, instead of taking the integration
-    value for both peptides, it only takes it for the
-    relevant peptides, and places a 0 (log(1)) in the
-    for the integration of the other peptide.
-    """
-
-
-    dats = []
-
-    for i, dfs in enumerate(df_list):
-        dats.append(((dfs[0].groupby(['type']).get_group('S'))
-        .groupby(['sequence', 'cs'])
-        .mean()[['log_sam_int_corr', 'log_ref_int']]
-        .combine_first(dfs[1]
-            .groupby(['type']).get_group('S')
-            .groupby(['sequence', 'cs'])
-            .mean()[['log_sam_int_corr', 'log_ref_int']])
-        .combine_first(pd.DataFrame(dfs[0]
-                .groupby(['type']).get_group('&S')
-                .groupby(['sequence', 'cs'])
-                .mean()['log_sam_int_corr'])
-                      )
-        .combine_first(pd.DataFrame(dfs[1]
-                .groupby(['type']).get_group('&S')
-                .groupby(['sequence','cs'])
-                .mean()['log_ref_int'])
-                      )
-        )
-        .rename(columns={'log_sam_int_corr':'{}_n14_{}'.format(name, i+1), 'log_ref_int': '{}_n15_{}'.format(name, i+1)})
-        .T
-        .fillna(0))
 
     if clean:
         return clean_pca_df(pd.concat(dats))
