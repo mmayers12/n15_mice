@@ -3,7 +3,11 @@ SQT File Parser
 DTASelect-filter.txt File Parser
 
 """
+import sys
+sys.path.append('..')
 import re
+import pandas as pd
+import numpy as np
 from itertools import chain
 from collections import defaultdict
 from .utils import get_lcstep, get_unmod_seq
@@ -403,3 +407,128 @@ def build_pep_quant_dict(dtaselect_filter, field='Redundancy', **kwargs):
     return pep_quant
 
 
+def dtaparser_peps_to_df(dtaparser, n15=False):
+    """
+    Takes a parserd dta file and conversts the peptides to a DataFrame
+    
+    Fixes file name, removes redunant keys, adds n14/n15 metadata.
+
+    :param dtaparser: parsed DTASelect-filter.txt file, usually as a list
+    :param n15: Was this filtering exclusively from an n15 search?  
+    """
+    
+    # convert from json
+    df = pd.io.json.json_normalize(dtaparser, 'peptides')
+    
+    # Fix some metadata
+    df['file_name'] = df['FileName'].str.split('.', expand=True)[0]
+    if n15:
+        df['n15'] = True
+    else:
+        df['n15'] = df['file_name'].str.contains('n15')
+    
+    # remove extra columns
+    redundant_cols = ['FileName', 'Scan', 'ChargeState', 'isModified', 'LCStep', 'AA_Sequence']    
+    df  = (df.drop(redundant_cols, axis=1)
+             .rename(columns=str.lower))
+    
+    return df
+
+
+def build_pep_quant_df(light_dta, heavy_dta, combined_dta, census_out):
+    """
+    From the 4 files associated with a mixed run: N14_dtaselect, N15_dtaselect,
+    Combined_filter_dtaselect, and combined filter ceonsus-out.txt, this will
+    build a DataFrame that contais all of the quant information for a peptide.
+    
+    :param light_dta: path to light (n14) dta file
+    :param heavy_dta: path to heavy (n15) dta file
+    :param combined_dta: path to dta file with combined filtering
+    :param census_out: path to census-out.txt file for combined filtering quant
+    """
+    
+    from functools import reduce
+    from scripts import census_parser as cp
+    
+    #Imprort data from files    
+    c_prot, c_peps = cp.parse_file(census_out)
+    ldta = dtaparser_peps_to_df(list(dta_select_parser(light_dta)))
+    hdta = dtaparser_peps_to_df(list(dta_select_parser(heavy_dta)), n15=True)
+    cdta = dtaparser_peps_to_df(list(dta_select_parser(combined_dta)))
+    
+    # Columns we want to keep
+    dta_cols = ['redundancy', 'unmod_peptide', 'aa_sequence', 'charge_state']
+    census_cols = ['ratio', 'rev_slope_ratio', 'type', 'regression_factor', 'peak_int', 'aa_sequence', 'charge_state']
+    
+    # Rename some columns with important unique values
+    n14 = ldta[dta_cols].rename(columns={'redundancy': 'l_spec'})
+    n15 = hdta[dta_cols].rename(columns={'redundancy': 'h_spec'})
+    comb = cdta[dta_cols+['n15']].rename(columns={'redundancy': 'c_spec', 'n15': 'c_n15'})
+
+    # Store metadata
+    n14['n14'] = True
+    n15['n15'] = True
+    
+    # Combine DTA Dataframes
+    dfs = [n14, n15, comb]
+    df = reduce(lambda left, right: pd.merge(left, right, 
+                                             on=['aa_sequence', 'charge_state', 'unmod_peptide'], 
+                                             how='outer'), dfs)
+    
+    # Reset some values for caluclations
+    df[['l_spec', 'h_spec', 'c_spec']] = df[['l_spec', 'h_spec', 'c_spec']].replace(np.nan, 0)
+    df[['n14', 'n15']] = df[['n14', 'n15']].replace(np.nan, False)
+    df['add_spec'] = df['l_spec'] + df['h_spec']
+    
+    # Add census info to DTA df
+    df = (df.merge(c_peps.rename(columns={'cs':'charge_state'})[census_cols],
+                   on=['aa_sequence', 'charge_state'], how='outer')
+                       .drop_duplicates(['aa_sequence', 'charge_state'])                       
+                       .set_index(['unmod_peptide', 'aa_sequence', 'charge_state'])
+                       .sort_index())
+    
+    return df
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
