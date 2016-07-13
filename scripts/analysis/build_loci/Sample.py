@@ -39,21 +39,27 @@ class Sample(dict):
     prot_to_pep: Dict[Int: Set[Str]] -> {prot_id: {'pepA','pepB'}}
         For each protid, we want the peptides that support it
     """
-    def __init__(self, sample_name, dtaselect_path, db_info, metadata = {}, ppp = 2):
+    def __init__(self, sample_name, sample_info, db_info, metadata = {}, ppp = 2):
+
         self.sample_name = sample_name
         self.db_info = db_info
-        self.update(blazmass_tools.dta_select_header(dtaselect_path))
+        self.update(blazmass_tools.dta_select_header(sample_info.path))
         self.set_metadata(metadata)
         
-        """ We don't need this do we????
-        dta_len = len(list(blazmass_tools.dta_select_parser(dtaselect_path,small=True, get_tax=False)))
-        self.dta_select = list(tqdm(blazmass_tools.dta_select_parser(dtaselect_path, 
-                                    get_tax=True, taxDB=db_info.taxDB, protDB=db_info.protDB),total=dta_len, nested=True))"""
-
-        self.dta_select = list(blazmass_tools.dta_select_parser(dtaselect_path,get_tax=False))
-        self.pep_quant = blazmass_tools.build_pep_quant_dict(self.dta_select, field='Redundancy')
-        self.peptides = set(self.pep_quant.keys())
-        
+        if sample_info.quant:
+            self.dta_select = list(blazmass_tools.dta_select_parser(sample_info.path,get_tax=False))
+            self.pep_quant = blazmass_tools.build_pep_quant_df(sample_info.l_dta, sample_info.h_dta, sample_info.comb_dta, sample_info.census)
+            if sample_info.n15:
+                self.pep_quant = self.pep_quant.query('n15 or c_n15 or ((not c_n15) and type == "S")')
+            else:
+                self.pep_quant = self.pep_quant.query('n14 or (not c_n15) or (c_n15 and type == "S")')
+            self.peptides = set(self.pep_quant.index.get_level_values(0))
+            self.pep_quant = self.make_ratio_quant(sample_info.n15)
+        else:
+            self.dta_select = list(blazmass_tools.dta_select_parser(sample_info.path,get_tax=False))
+            self.pep_quant = blazmass_tools.build_pep_quant_dict(self.dta_select, field='Redundancy')
+            self.peptides = set(self.pep_quant.keys())
+            
         self.loci_pep_prot = build_loci_from_all_peptides(self.peptides, group_subsets=False, ppp=ppp, seqDB=db_info.seqDB)
         self.prot_ids = set(chain(*self.loci_pep_prot.values()))
         self.prot_to_pep = {protid: set(peptides) for (peptides, protid) in chain(
@@ -98,10 +104,16 @@ class Sample(dict):
         summary.Proteins.Filtered = summary.Proteins.Decoy + summary.Proteins.Forward
         summary.Proteins.FDR = 100 * summary.Proteins.Decoy / summary.Proteins.Forward
         
-        summary.Spectra.Decoy = sum(self.pep_quant[peptide] for peptide in decoy_peptides)
-        summary.Spectra.Forward = sum(self.pep_quant[peptide] for peptide in forward_peptides)
-        summary.Spectra.Filtered = summary.Spectra.Decoy + summary.Spectra.Forward
-        summary.Spectra.FDR = 100 * summary.Spectra.Decoy / summary.Spectra.Forward
+        if self['quant']:
+            summary.Spectra.Decoy = sum(self.pep_quant[peptide]['c_spec'] for peptide in decoy_peptides)
+            summary.Spectra.Forward = sum(self.pep_quant[peptide]['c_spec'] for peptide in forward_peptides)
+            summary.Spectra.Filtered = summary.Spectra.Decoy + summary.Spectra.Forward
+            summary.Spectra.FDR = 100 * summary.Spectra.Decoy / summary.Spectra.Forward
+        else:                
+            summary.Spectra.Decoy = sum(self.pep_quant[peptide] for peptide in decoy_peptides)
+            summary.Spectra.Forward = sum(self.pep_quant[peptide] for peptide in forward_peptides)
+            summary.Spectra.Filtered = summary.Spectra.Decoy + summary.Spectra.Forward
+            summary.Spectra.FDR = 100 * summary.Spectra.Decoy / summary.Spectra.Forward
         
         return summary
     
@@ -109,5 +121,28 @@ class Sample(dict):
         """ return a list of ProteinClusters from a Sample """
         clusterDB = self.db_info.clusterDB
         return [ProteinCluster(cluster_doc, self) for cluster_doc in clusterDB.find({'pID': {'$in': list(self.prot_ids)}})]
+        
+        
+    def make_ratio_quant(self, n15):
+        """
+        Get the quantifications for the sample from the ratio info
+        """
+
+        self.pep_quant['weighted'] = self.pep_quant['ratio'] * self.pep_quant['regression_factor']
+        self.pep_quant['weighted_rev'] = self.pep_quant['rev_slope_ratio'] * self.pep_quant['regression_factor']
+        new = self.pep_quant.groupby(level=0)[['l_spec','h_spec','c_spec', 'add_spec']].sum()
+
+        # New ratio = sum(ratio*regression_factor) / sum(regression_factor)        
+        new[['ratio', 'rev_slope_ratio', 'regression_factor']] = (self.pep_quant
+                .query('type == "S"')
+                .dropna()
+                .groupby(level=0)[['weighted', 'weighted_rev', 'regression_factor']]
+                .sum())
+
+        new['ratio'] = new['ratio'] / new['regression_factor']
+        new['rev_slope_ratio'] = new['rev_slope_ratio'] / new['regression_factor']
+        
+        return new.T
+        
         
         

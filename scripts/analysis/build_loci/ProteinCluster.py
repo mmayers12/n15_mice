@@ -33,9 +33,15 @@ class ProteinCluster():
         self.all_cluster_prot_ids = set(cluster_doc['pID'])
         self.cluster_prot_ids = self.all_cluster_prot_ids & sample.prot_ids
         self.peptide_seq = set(chain(*[sample.prot_to_pep[prot_id] for prot_id in self.cluster_prot_ids]))
-        self.peptide_quant = {seq: sample.pep_quant[seq] for seq in self.peptide_seq}
-        self.quantification = int(sum(list(self.peptide_quant.values())))
         
+        if self.sample['quant']:
+            if self.sample['n15']:
+                self.peptide_quant = {seq: self.ratio_pep_quant(sample.pep_quant[seq], self.sample['n15']) for seq in self.peptide_seq}
+                self.quantification = self.ratio_prot_quant()
+        else:    
+            self.peptide_quant = {seq: sample.pep_quant[seq] for seq in self.peptide_seq}
+            self.quantification = int(sum(list(self.peptide_quant.values())))
+            
     def __str__(self):
         return "cluster id: {}".format(self.cluster_id)
     
@@ -46,3 +52,40 @@ class ProteinCluster():
         # pick the largest protein in one of dbs: ['RefSeq','UniProt*', 'HMP_Reference_Genomes']
         return get_good_name(self.cluster_prot_ids, self.sample.db_info.protDB)
 
+    
+    def ratio_pep_quant(self, pep, n15):
+        
+        import numpy as np        
+
+        new_cols = ['ratio', 'reg_fact', 'counts']
+        if n15:
+            cols = ['rev_slope_ratio', 'regression_factor', 'h_spec']
+        else:
+            cols = ['ratio', 'regression_factor', 'l_spec']
+        
+        quant = pep[cols].rename({o:n for o, n in zip(cols, new_cols)}).to_dict()
+        
+        if np.isnan(quant['ratio']):
+            quant['ratio'] = (10+pep['l_spec']) / (10+pep['h_spec'])
+            quant['reg_fact'] = 0            
+            if n15:
+                quant['ratio'] = 1/quant['ratio']
+            
+        return quant
+    
+    def ratio_prot_quant(self):
+
+        num = 0
+        denom = 0
+        counts = 0        
+        for seq in self.peptide_quant.values():
+            r = seq['ratio']
+            c = seq['counts']
+            f = seq['reg_fact']
+            num += r*f
+            denom += f
+            counts += c
+        
+        ratio = num/denom
+        
+        return {'ratio' : ratio, 'counts': counts}

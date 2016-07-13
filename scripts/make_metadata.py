@@ -2,6 +2,8 @@ import os
 import pandas as pd
 import numpy as np
 
+BASE = os.getcwd()
+
 def strip_date(name):
     return '_'.join(name.split('-')[1:])
 
@@ -87,20 +89,23 @@ def make_line(folder, sample, N14 = True):
     # N14 and path
     if N14:
         line_d['n15'] = False
-        line_d['path'] = (folder + "/rawXtractor/dta-pfp-0.01/DTASelect-filter.txt")
+        line_d['path'] = os.path.join(BASE, folder, "rawXtractor/dta-pfp-0.01/DTASelect-filter.txt")
     else:
         line_d['n15'] = True
-        line_d['path'] = (folder + "/rawXtractor/n15_search/dta-pfp-0.01/DTASelect-filter.txt")
+        line_d['path'] = os.path.join(BASE, folder, "rawXtractor/n15_search/dta-pfp-0.01/DTASelect-filter.txt")
     # Determine if its an N14 N15 mix file for quant, and if so store paired DTA output
     if 'N14N15' in folder:
         line_d['quant'] = True
-        if line_d['n15']:
-            line_d['paired_file'] = folder + "/rawXtractor/dta-pfp-0.01/DTASelect-filter.txt"
-        else:
-            line_d['paired_file'] = folder + "/rawXtractor/n15_search/dta-pfp-0.01/DTASelect-filter.txt"
+        line_d['l_dta'] = os.path.join(BASE, folder, "rawXtractor/dta-pfp-0.01/DTASelect-filter.txt")
+        line_d['h_dta'] = os.path.join(BASE, folder, "rawXtractor/n15_search/dta-pfp-0.01/DTASelect-filter.txt")
+        line_d['comb_dta'] = os.path.join(BASE, folder, "rawXtractor/combined_search/DTASelect-filter.txt")
+        line_d['census'] = os.path.join(BASE, folder, "rawXtractor/combined_search/census-out.txt")
     else:
         line_d['quant'] = False
-        line_d['paired_file'] = np.nan
+        line_d['l_dta'] = np.nan
+        line_d['h_dta'] = np.nan
+        line_d['comb_dta'] = np.nan
+        line_d['census'] = np.nan
     return line_d
 #%%
 def main():

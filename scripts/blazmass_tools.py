@@ -477,7 +477,7 @@ def build_pep_quant_df(light_dta, heavy_dta, combined_dta, census_out):
     
     # Reset some values for caluclations
     df[['l_spec', 'h_spec', 'c_spec']] = df[['l_spec', 'h_spec', 'c_spec']].replace(np.nan, 0)
-    df[['n14', 'n15']] = df[['n14', 'n15']].replace(np.nan, False)
+    df[['n14', 'n15', 'c_n15']] = df[['n14', 'n15', 'c_n15']].replace(np.nan, False)
     df['add_spec'] = df['l_spec'] + df['h_spec']
     
     # Add census info to DTA df
