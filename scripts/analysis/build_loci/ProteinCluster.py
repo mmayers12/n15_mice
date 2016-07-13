@@ -1,3 +1,4 @@
+import numpy as np
 from itertools import chain
 from .common import get_good_name
 
@@ -35,12 +36,13 @@ class ProteinCluster():
         self.peptide_seq = set(chain(*[sample.prot_to_pep[prot_id] for prot_id in self.cluster_prot_ids]))
         
         if self.sample['quant']:
-            if self.sample['n15']:
-                self.peptide_quant = {seq: self.ratio_pep_quant(sample.pep_quant[seq], self.sample['n15']) for seq in self.peptide_seq}
-                self.quantification = self.ratio_prot_quant()
+            self.peptide_quant = {seq: self.ratio_pep_quant(sample.pep_quant[seq], self.sample['n15']) for seq in self.peptide_seq}
+            self.quantification = self.ratio_prot_quant()
+               
         else:    
-            self.peptide_quant = {seq: sample.pep_quant[seq] for seq in self.peptide_seq}
-            self.quantification = int(sum(list(self.peptide_quant.values())))
+            self.peptide_quant = {seq: {'counts': sample.pep_quant[seq], 'ratio': np.nan, 'reg_fact': np.nan} 
+                                        for seq in self.peptide_seq}
+            self.quantification = {'counts': int(sum(list(x['counts'] for x in self.peptide_quant.values()))), 'ratio': np.nan}
             
     def __str__(self):
         return "cluster id: {}".format(self.cluster_id)
@@ -53,20 +55,22 @@ class ProteinCluster():
         return get_good_name(self.cluster_prot_ids, self.sample.db_info.protDB)
 
     
-    def ratio_pep_quant(self, pep, n15):
-        
-        import numpy as np        
+    def ratio_pep_quant(self, pep, n15):     
 
-        new_cols = ['ratio', 'reg_fact', 'counts']
+        # Columns with important quant info
         if n15:
             cols = ['rev_slope_ratio', 'regression_factor', 'h_spec']
         else:
             cols = ['ratio', 'regression_factor', 'l_spec']
         
+        # Regularize column names across n14 and n15 samples
+        new_cols = ['ratio', 'reg_fact', 'counts']
         quant = pep[cols].rename({o:n for o, n in zip(cols, new_cols)}).to_dict()
         
+        # If there is no ratio do a ratio of specs... but add 5 to both
+        # to reduce importance low count ratios e.g 2:1 or 1:0 or 2:0 
         if np.isnan(quant['ratio']):
-            quant['ratio'] = (10+pep['l_spec']) / (10+pep['h_spec'])
+            quant['ratio'] = (5+pep['l_spec']) / (5+pep['h_spec'])
             quant['reg_fact'] = 0            
             if n15:
                 quant['ratio'] = 1/quant['ratio']
@@ -75,17 +79,29 @@ class ProteinCluster():
     
     def ratio_prot_quant(self):
 
-        num = 0
-        denom = 0
-        counts = 0        
-        for seq in self.peptide_quant.values():
-            r = seq['ratio']
-            c = seq['counts']
-            f = seq['reg_fact']
-            num += r*f
-            denom += f
-            counts += c
+        # extract peptide quant values        
+        ratios = [q['ratio'] for q in self.peptide_quant.values()]
+        counts = [q['counts'] for q in self.peptide_quant.values()]
+        reg_facts = [q['reg_fact'] for q in self.peptide_quant.values()]
+
+        # Get aggergate quant values
+        num = sum([r*f for r, f in zip(ratios, reg_facts)])
+        denom = sum(reg_facts)
+        tot_counts = sum(counts)
         
+        # If no census ratios, but spec counts are high, might be able to
+        # infer a ratio from these
+        if denom == 0:        
+            if tot_counts > 5:
+                # Solves for l+h spec eqn: ratio = this_spec+5 / other_spec+5                
+                weights = [ (((c+5)/r)-5)+c for c,r in zip(counts, ratios)]
+                num = sum([w*r for w,r in zip(weights,ratios)])
+                denom = sum(weights)
+            else:
+                num, denom = (np.nan, np.nan)
+                
+        # get weighted ratio for protein
         ratio = num/denom
+
         
-        return {'ratio' : ratio, 'counts': counts}
+        return {'ratio' : ratio, 'counts': tot_counts}
