@@ -51,8 +51,12 @@ class MultiSampleProteinCluster():
     Example:
     from metaproteomics.analysis.build_loci import ProteinCluster
     ProteinCluster(cluster_id = 1, cluster_prot_ids = [1,2,3], 
-                   cluster_peptides = {'sampleA':{'aaa':100,'bbb':23}, 'sampleB':{'aaa':101,'ccc':123}}, 
-                   quantification = {'sampleA': 123, 'sampleB': 224})
+                   cluster_peptides = {'sampleA':{'aaa': {'counts':100, 'ratio':1.213, 'reg_fact': .8892}, 
+                                                  'bbb': {'counts':23, 'ratio':0.866, 'reg_fact': .9421},
+                                       'sampleB':{'aaa': {'counts':101, 'ratio':1.271, 'reg_fact': .8747},
+                                                  'ccc': {'counts':123, 'ratio':3.741, 'reg_fact': .9548}}, 
+                   quantification = {'sampleA': {'counts': 123, 'ratio': 1.304},
+                                     'sampleB': {'counts': 224, 'ratio': 2.560})
 
     """
     functionizer = None
@@ -150,19 +154,47 @@ class MultiSampleProteinCluster():
     def __repr__(self):
         return self.__dict__.__repr__()
         
-    def passes_thresh(self, metadata, min_quant = 2, min_samples = 2, min_samples_per_group = 2, group = "biological"):
+    def passes_thresh(self, metadata, min_quant = 2, ratio_ok = True, ratio_only = False, min_samples = 2, min_samples_per_group = 2, group = "biological"):
         """
         min_quant: Must have a minimum quantification of `min_quant` in at least one sample
+        ratio_ok: Allow presence of a ratio, rather than `min_quant`, to allow threshold passing
         min_samples: Must have a minimum quantification of `min_quant` in at least `min_samples` samples
         min_samples_per_group: Must be at least `min_samples_per_group` samples that are in the same group `group`, 
                                 having a minimum quantification of `min_quant`
         """
-        if not any([x>=min_quant for x in self.quantification.values()]):
+        import numpy as np
+
+        if ratio_only:
+            num_ratios = (~np.isnan([x['ratio'] for x in self.quantification.values()])).sum()
+            if  num_ratios == 0:
+                return False
+            if len([x['counts'] for x in self.quantification.values() if ~np.isnan(x['ratio'])]) < min_samples:
+                return False
+            if min_samples_per_group:
+                samples_that_pass = [sample for sample,value in self.quantification.items() if  ~np.isnan(value['ratio'])]
+                if not any(metadata[samples_that_pass].loc[group].value_counts() >= min_samples_per_group):
+                    return False
+            return True
+        
+        if ratio_ok:
+            num_ratios = (~np.isnan([x['ratio'] for x in self.quantification.values()])).sum()
+            if  num_ratios == 0:
+                if not any([x['counts']>=min_quant for x in self.quantification.values()]):
+                    return False
+            if len([x['counts'] for x in self.quantification.values() if (x['counts']>=min_quant or ~np.isnan(x['ratio']))]) < min_samples:
+                return False
+            if min_samples_per_group:
+                samples_that_pass = [sample for sample,value in self.quantification.items() if (value['counts']>=min_quant or ~np.isnan(value['ratio']))]
+                if not any(metadata[samples_that_pass].loc[group].value_counts() >= min_samples_per_group):
+                    return False
+            return True
+
+        if not any([x['counts']>=min_quant for x in self.quantification.values()]):
             return False
-        if len([x for x in self.quantification.values() if x>=min_quant]) < min_samples:
+        if len([x['counts'] for x in self.quantification.values() if x['counts']>=min_quant]) < min_samples:
             return False
         if min_samples_per_group:
-            samples_that_pass = [sample for sample,value in self.quantification.items() if value>=min_quant]
+            samples_that_pass = [sample for sample,value in self.quantification.items() if value['counts']>=min_quant]
             if not any(metadata[samples_that_pass].loc[group].value_counts() >= min_samples_per_group):
                 return False
         return True
@@ -178,4 +210,4 @@ class MultiSampleProteinCluster():
         return d
     
     def normalize(self, norm_factors, field = "norm_quantification"):
-        self.__dict__[field] = {sample: value/norm_factors[sample] for sample,value in self.quantification.items()}
+        self.__dict__[field] = {sample: value['counts']/norm_factors[sample] for sample,value in self.quantification.items()}

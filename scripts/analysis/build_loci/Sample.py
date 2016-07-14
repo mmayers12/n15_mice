@@ -39,24 +39,24 @@ class Sample(dict):
     prot_to_pep: Dict[Int: Set[Str]] -> {prot_id: {'pepA','pepB'}}
         For each protid, we want the peptides that support it
     """
-    def __init__(self, sample_name, sample_info, db_info, metadata = {}, ppp = 2):
+    def __init__(self, sample_name, dtaselect_path, db_info, metadata = {}, ppp = 2):
 
         self.sample_name = sample_name
         self.db_info = db_info
-        self.update(blazmass_tools.dta_select_header(sample_info.path))
+        self.update(blazmass_tools.dta_select_header(dtaselect_path))
         self.set_metadata(metadata)
         
-        if sample_info.quant:
-            self.dta_select = list(blazmass_tools.dta_select_parser(sample_info.path,get_tax=False))
-            self.pep_quant = blazmass_tools.build_pep_quant_df(sample_info.l_dta, sample_info.h_dta, sample_info.comb_dta, sample_info.census)
-            if sample_info.n15:
+        if self['quant']:
+            self.dta_select = list(blazmass_tools.dta_select_parser(self['path'],get_tax=False))
+            self.pep_quant = blazmass_tools.build_pep_quant_df(self['l_dta'], self['h_dta'], self['comb_dta'], self['census'])
+            if self['n15']:
                 self.pep_quant = self.pep_quant.query('n15 or c_n15 or ((not c_n15) and type == "S")')
             else:
                 self.pep_quant = self.pep_quant.query('n14 or (not c_n15) or (c_n15 and type == "S")')
             self.peptides = set(self.pep_quant.index.get_level_values(0))
-            self.pep_quant = self.make_ratio_quant(sample_info.n15)
+            self.pep_quant = self.make_ratio_quant(self['n15'])
         else:
-            self.dta_select = list(blazmass_tools.dta_select_parser(sample_info.path,get_tax=False))
+            self.dta_select = list(blazmass_tools.dta_select_parser(self['path'],get_tax=False))
             self.pep_quant = blazmass_tools.build_pep_quant_dict(self.dta_select, field='Redundancy')
             self.peptides = set(self.pep_quant.keys())
             
@@ -81,6 +81,7 @@ class Sample(dict):
         return self
     
     def set_metadata(self, metadata):
+        # Check if sample is in metadata
         if isinstance(metadata,pd.core.frame.DataFrame):
             if self.sample_name in metadata:
                 metadata = metadata[self.sample_name]
@@ -88,6 +89,16 @@ class Sample(dict):
                 raise ValueError("{} not found in metadata DataFrame".format(self.sample_name))
         if isinstance(metadata,pd.core.frame.Series):
             metadata = dict(metadata)
+        
+        # Initialize some values used for quantification        
+        if not 'quant' in metadata:
+            metadata['quant'] = False
+            if not 'n15' in metadata:
+                metadata['n15'] = False
+            if not 'l_dta' in metadata or not 'h_dta' in metadata or not 'comb_dta' in metadata or not 'census' in metadata:
+                raise ValueError("Required files for quantification missing.  Please ensure that there are paths to "+
+                                 "the light, heavy and combined DTASelect-filter.txt files (l_dta, h_dta, and comb_dta) "+
+                                 "as well as the combined census-out.txt file (census)")
         self.update(metadata)
     
     def summary(self):

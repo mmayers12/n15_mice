@@ -46,18 +46,43 @@ def annotate(grouped_loci, db_info):
 
 
 def yates_normalization(samples):
-    # return norm_factors from a list of Samples
-    sample_pep_quant = {sample.sample_name:sample.pep_quant for sample in samples.values()}
-    # get 500 top peptides in each sample
-    toppep = dict()
-    for sample,pep_quant in sample_pep_quant.items():
-        toppep[sample],_ = zip(*sorted(pep_quant.items(),key=lambda x:x[1])[-500:])
-    sample_count = Counter(chain(*toppep.values()))
-    common_pep = {pep for pep,count in sample_count.items() if count>=round(len(samples)/2)} #half of the the samples
-    s=Counter()
-    for pep in common_pep:
-        s.update({sample:sample_pep_quant[sample].get(pep,0) for sample in sample_pep_quant})
-    return {sample:value/np.mean(list(s.values())) for sample, value in s.items()}
+    
+    # See if these are n15 quantified
+    quant_key = {sample.sample_name: sample['quant'] for sample in samples.values()}
+    
+    toppep = pd.DataFrame()
+    for sample_name in quant_key:
+        if quant_key[sample_name]:
+            sample = samples[sample_name]
+
+            # do we want n14 or n15 specs?
+            if not sample['n15']:
+                spec = 'l_spec'
+            else:
+                spec = 'h_spec'
+
+            # get 500 top peptides in each sample
+            top_500 = (sample.pep_quant
+                             .T
+                             .sort_values(spec, ascending=False)
+                             .iloc[:500][spec]
+                             .rename(sample_name))
+        else:
+            top_500 = pd.Series(samples[sample_name].pep_quant).sort_values(ascending=False).iloc[:500]
+        toppep = toppep.join(top_500, how='outer')
+    
+
+    # Count how many samples each peptide appears in
+    toppep['sample_counts'] = toppep.T.count().T
+
+    # Total the peptides and get the mean
+    toppep['avg'] = toppep.apply(lambda r: r.drop('sample_counts').mean(), axis=1)
+    
+    # Only get those in more than half the samples
+    common_pep = toppep.query('sample_counts >= {}'.format(len(samples)/2))
+    print("{} common peptides for Normalizaion".format(common_pep.shape[0]))
+    
+    return (common_pep.sum() / common_pep.sum().mean()).to_dict()
 
 
 def deseq_normalization(grouped_loci, show_plot=False):
@@ -70,14 +95,18 @@ def deseq_normalization(grouped_loci, show_plot=False):
      corresponding sample."""
     from scipy.stats import mstats
     for locus in grouped_loci:        
-        this_gmean = mstats.gmean(list(locus.quantification.values()))
-        locus.locus_norm = {sample: value/this_gmean for sample,value in locus.quantification.items()}
+        # Add 1 to counts so no divide by zero errors later on
+        counts = [x['counts'] for x in locus.quantification.values() if x['counts'] > 0]
+        if len(counts) > 0:
+            this_gmean = mstats.gmean(counts)
+        else:
+            this_gmean=1
+        locus.locus_norm = {sample: value['counts']/this_gmean for sample,value in locus.quantification.items()}
     ratios = dict()
     for locus in grouped_loci:
         for key,value in locus.locus_norm.items():
             ratios.setdefault(key,[]).append(value)
-    if show_plot:
-        plt.boxplot(list(ratios.values()), labels=list(ratios.keys()))
+    plt.boxplot(list(ratios.values()), labels=list(ratios.keys()))
     norm_factors = {sample:np.median(value) for sample, value in ratios.items()}
     for locus in grouped_loci:
         locus.normalize(norm_factors)
@@ -127,7 +156,8 @@ def to_json(protein_clusters, samples, json_filename, functionizer=None, norm=Tr
         pt = pd.DataFrame(cluster['cluster_peptides']).fillna(0)
         cluster['peptide_table'] = pt.to_html()
         cluster['peptides'] = ';' + ';'.join(pt.index) + ';'
-        cluster['max_quant'] = round(max(cluster['quantification'].values()))
+        cluster['max_quant'] = round(max([x['counts'] for x in cluster['quantification'].values()]))
+        cluster['avg_ratio'] = np.nanmean([x['ratio'] for x in cluster['quantification'].values()])       
         
         #pt['peptide'] = pt.index        
         records = pt.to_dict('split')
@@ -142,8 +172,8 @@ def to_json(protein_clusters, samples, json_filename, functionizer=None, norm=Tr
         
     if norm:
         for pc in data:
-            pc['quantification'] = pc['norm_quantification']
-            pc['quantification'] = {key:int(round(value)) for key,value in pc['quantification'].items()}
+            for key in pc['quantification'].keys():
+                pc['quantification'][key]['counts'] = int(round(pc['norm_quantification'][key]))
 
     with open(json_filename,'w') as f:
         json.dump({'data':data, "samples":samples, "Pfam_info": Pfam_info}, f, indent=1, cls=SetEncoder)
