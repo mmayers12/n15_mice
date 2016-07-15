@@ -3,6 +3,8 @@ from ..functional_analysis import Functionizer
 from .. import taxonomy
 from itertools import chain
 from collections import defaultdict
+import numpy as np
+
 
 
 def group_across_samples(protein_clusters, db_info=None):
@@ -108,7 +110,28 @@ class MultiSampleProteinCluster():
         self.lookup_function()
         self.get_go()
         self.get_tax_info()
+        self.quantify()
+    
+    def quantify(self):
+        """
+        Get average ratio and p-value from ratio t-test
+        Ratio t-test: log-transform ratios, then t-test against 0        
+        """
+        from scipy import stats        
         
+        ratios = [q['ratio'] for q in self.quantification.values()]
+        
+        # Filter out 0 and NaN        
+        ratios = np.array([r for r in ratios if r != 0])
+        ratios = ratios[~np.isnan(ratios)] 
+        
+        log_ratios = np.log(ratios)
+        
+        t, p = stats.ttest_1samp(log_ratios, 0)
+        
+        self.avg_ratio = np.mean(ratios)
+        self.p_value = p
+    
     # get a "representative" locus
     def lookup_name(self, all_prot_result=None):
         
@@ -148,6 +171,7 @@ class MultiSampleProteinCluster():
         self.lca = self.ncbi_taxonomy.LCA(self.tax_id)
         self.lca_organism = self.ncbi_taxonomy.taxid_to_taxonomy(self.lca)['scientific_name'] if self.lca else ''
     
+    
     def __str__(self):
         return """Cluster ID: {cluster_id}\nQuantification: {q}\nGO Terms: {g}""".format(cluster_id=self.cluster_id, q=self.quantification, g=self.go_names)
     
@@ -162,11 +186,10 @@ class MultiSampleProteinCluster():
         min_samples_per_group: Must be at least `min_samples_per_group` samples that are in the same group `group`, 
                                 having a minimum quantification of `min_quant`
         """
-        import numpy as np
 
         if ratio_only:
             num_ratios = (~np.isnan([x['ratio'] for x in self.quantification.values()])).sum()
-            if  num_ratios == 0:
+            if num_ratios == 0:
                 return False
             if len([x['counts'] for x in self.quantification.values() if ~np.isnan(x['ratio'])]) < min_samples:
                 return False
@@ -178,7 +201,7 @@ class MultiSampleProteinCluster():
         
         if ratio_ok:
             num_ratios = (~np.isnan([x['ratio'] for x in self.quantification.values()])).sum()
-            if  num_ratios == 0:
+            if num_ratios == 0:
                 if not any([x['counts']>=min_quant for x in self.quantification.values()]):
                     return False
             if len([x['counts'] for x in self.quantification.values() if (x['counts']>=min_quant or ~np.isnan(x['ratio']))]) < min_samples:

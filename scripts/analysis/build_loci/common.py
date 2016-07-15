@@ -127,6 +127,13 @@ def read_metadata(metadata_path):
     
     return metadata
 
+def format_qdict(qdict):
+    reform = defaultdict(dict)
+    for sampName, sampDict in qdict.items():
+        for seqName, seqDict in sampDict.items():
+            for qType, qVal in seqDict.items():
+                reform['\n'.join([sampName, qType])].update({seqName:qVal})
+    return pd.DataFrame(reform).fillna(0)
 
 # maybe to_json and to_df should go into a `DataSet` class? Which is a list of MultiSampleProteinClusters?
 def to_json(protein_clusters, samples, json_filename, functionizer=None, norm=True):
@@ -135,7 +142,6 @@ def to_json(protein_clusters, samples, json_filename, functionizer=None, norm=Tr
     """
     import json
     import numpy
-    import pandas as pd
     class SetEncoder(json.JSONEncoder):
         def default(self, obj):
             if isinstance(obj, set):
@@ -153,11 +159,17 @@ def to_json(protein_clusters, samples, json_filename, functionizer=None, norm=Tr
     data = [x.as_dict() for x in protein_clusters]
     
     for cluster in data:
-        pt = pd.DataFrame(cluster['cluster_peptides']).fillna(0)
+        pt = format_qdict(cluster['cluster_peptides'])
         cluster['peptide_table'] = pt.to_html()
         cluster['peptides'] = ';' + ';'.join(pt.index) + ';'
         cluster['max_quant'] = round(max([x['counts'] for x in cluster['quantification'].values()]))
-        cluster['avg_ratio'] = np.nanmean([x['ratio'] for x in cluster['quantification'].values()])       
+
+        # Fix Ratio values so no np.nan appears
+        if np.isnan(cluster['avg_ratio']):
+            cluster['avg_ratio'] = 0
+        for samp, values in cluster['quantification'].items():
+            if np.isnan(values['ratio']):
+                cluster['quantification'][samp]['ratio'] = 0
         
         #pt['peptide'] = pt.index        
         records = pt.to_dict('split')
