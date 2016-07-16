@@ -133,7 +133,7 @@ def format_qdict(qdict):
     for sampName, sampDict in qdict.items():
         for seqName, seqDict in sampDict.items():
             for qType, qVal in seqDict.items():
-                reform['\n'.join([sampName, qType])].update({seqName:qVal})
+                reform[(sampName, qType)].update({seqName:qVal})
     return pd.DataFrame(reform).fillna(0)
 
 
