@@ -79,7 +79,8 @@ def yates_normalization(samples):
     toppep['avg'] = toppep.apply(lambda r: r.drop('sample_counts').mean(), axis=1)
     
     # Only get those in more than half the samples
-    common_pep = toppep.query('sample_counts >= {}'.format(len(samples)/2))
+    common_pep = (toppep.query('sample_counts >= {}'.format(len(samples)/2))
+                        .drop(['avg', 'sample_counts'], axis=1))
     print("{} common peptides for Normalizaion".format(common_pep.shape[0]))
     
     return (common_pep.sum() / common_pep.sum().mean()).to_dict()
@@ -135,6 +136,52 @@ def format_qdict(qdict):
                 reform['\n'.join([sampName, qType])].update({seqName:qVal})
     return pd.DataFrame(reform).fillna(0)
 
+
+def get_sig_df(grouped_clusters, fc_cutoff=4, p_val_cutoff=.05, up_only=False, down_only=False):
+    dat = dict()
+    for i, pc in enumerate(grouped_clusters):
+        dat[i] = {'p_value': pc.p_value, 'avg_ratio': pc.avg_ratio, 'name': pc.name, 'id':pc.cluster_id}
+    df = pd.DataFrame.from_dict(dat, orient='index').dropna(subset=['avg_ratio', 'p_value'])
+    
+    # Take the 
+    df['-logp'] = -1*np.log10(df['p_value'])
+    df['logfc'] = np.log2(df['avg_ratio'])
+    
+    if up_only:
+        cutoff = lambda r: r['logfc']>np.log2(fc_cutoff) and r['-logp'] > -1*np.log10(p_val_cutoff)
+    elif down_only:
+        cutoff = lambda r: r['logfc']<-np.log2(fc_cutoff) and r['-logp'] > -1*np.log10(p_val_cutoff)
+    else:        
+        cutoff = lambda r: abs(r['logfc'])>np.log2(fc_cutoff) and r['-logp'] > -1*np.log10(p_val_cutoff)
+    
+    df['passes'] = df.apply(cutoff, axis=1)    
+    
+    return df
+
+
+def sig_up_json(grouped_clusters, samples, json_filename, functionizer=None, norm=True, fc_cutoff=4, p_val_cutoff=.05):
+    """
+    Outputs significantly upregulated loci to a json file for datatables
+    """
+    
+    up_df = get_sig_df(grouped_clusters, fc_cutoff=fc_cutoff, p_val_cutoff=p_val_cutoff, up_only=True)
+    up_clusters = []
+    for idx in list(up_df.loc[up_df['passes']].index):
+        up_clusters.append(grouped_clusters[idx])
+    to_json(up_clusters, samples, json_filename, functionizer=functionizer, norm=norm)
+
+
+def sig_down_json(grouped_clusters, samples, json_filename, functionizer=None, norm=True, fc_cutoff=4, p_val_cutoff=.05):
+    """
+    Outputs significantly downregulated loci to a json file for datatables
+    """
+    down_df = get_sig_df(grouped_clusters, fc_cutoff=fc_cutoff, p_val_cutoff=p_val_cutoff, down_only=True)
+    down_clusters = []
+    for idx in list(down_df.loc[down_df['passes']].index):
+        down_clusters.append(grouped_clusters[idx])
+    to_json(down_clusters, samples, json_filename, functionizer=functionizer, norm=norm)
+
+
 # maybe to_json and to_df should go into a `DataSet` class? Which is a list of MultiSampleProteinClusters?
 def to_json(protein_clusters, samples, json_filename, functionizer=None, norm=True):
     """
@@ -167,6 +214,8 @@ def to_json(protein_clusters, samples, json_filename, functionizer=None, norm=Tr
         # Fix Ratio values so no np.nan appears
         if np.isnan(cluster['avg_ratio']):
             cluster['avg_ratio'] = 0
+        if np.isnan(cluster['p_value']):
+            cluster['p_value'] = 'N/A'
         for samp, values in cluster['quantification'].items():
             if np.isnan(values['ratio']):
                 cluster['quantification'][samp]['ratio'] = 0
@@ -190,16 +239,43 @@ def to_json(protein_clusters, samples, json_filename, functionizer=None, norm=Tr
     with open(json_filename,'w') as f:
         json.dump({'data':data, "samples":samples, "Pfam_info": Pfam_info}, f, indent=1, cls=SetEncoder)
 
-def to_df(protein_clusters, norm=True):
+def to_df(protein_clusters, norm=True, ratios=False, peptides=False, nf=None):
     """
     List of MultiSampleProteinCluster to pandas dataframe
     If `norm`, use `norm_quantification` field, else use `quantification` field
+    If `ratios`, ratios will be used rather than spec counts will be used, this ignores the `norm` parameter.
+    If `peptides`, then the features returned will be peptides rather than cluster loci
+    If `pepties` and `norm` are both selected, a normalization factor `nf` will need to
+    be passed in order to normailze the counts.
     """
+    # Initialze what values to grab
+    if ratios:
+        q_factor = 'ratio'
+    else:
+        q_factor = 'counts'
+
+    # Grab Peptide Quantifications    
+    if peptides:
+        peptides = defaultdict(dict)
+        for pc in protein_clusters:
+            for samp, peps in pc.cluster_peptides.items():
+                for pep, vals in peps.items():
+                    peptides[pep].update({samp: vals[q_factor]})
+        if norm and nf and not ratios:
+            return (pd.DataFrame(peptides).T / pd.Series(nf)).T
+        return pd.DataFrame(peptides)
+
+    # Grab Locus Quantifications    
     if norm:
         return pd.DataFrame({x.cluster_id:x.norm_quantification for x in protein_clusters}).fillna(0)
     else:
-        return pd.DataFrame({x.cluster_id:x.quantification for x in protein_clusters}).fillna(0)
-
+        loci = defaultdict(dict)
+        for pc in protein_clusters:
+            for samp, values in pc.quantification.items():
+                loci[pc.cluster_id].update({samp: values[q_factor]})        
+        return pd.DataFrame(loci)
+        
+    
 def is_good_db(s):
     # ['RefSeq','UniProt*', 'HMP_Reference_Genomes']
     return True if "refseq" in s.lower() or "uniprot" in s.lower() or s.lower()=="hmp_reference_genomes" else False

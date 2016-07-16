@@ -226,7 +226,7 @@ class MultiSampleProteinCluster():
         d = {}
         keys = ['prot_info','tax_id','lca','lca_organism','go','go_names','annotations','quantification',
                 'cluster_id','cluster_peptides','cluster_prot_ids','name','peptide_table','max_quant',
-                'crapome','seq','norm_quantification']
+                'crapome','seq','norm_quantification', 'avg_ratio', 'p_value']
         for key in keys:                
             if key in self.__dict__:
                 d[key] = self.__dict__[key]
