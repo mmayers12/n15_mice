@@ -112,14 +112,20 @@ class MultiSampleProteinCluster():
         self.get_tax_info()
         self.quantify()
     
-    def quantify(self):
+    def quantify(self, samples=None):
         """
         Get average ratio and p-value from ratio t-test
-        Ratio t-test: log-transform ratios, then t-test against 0        
+        Ratio t-test: log-transform ratios, then t-test against 0
+        samples: a subset of samples to quantify across e.g if both heavy and
+        light samples included, it only makes sense to average ratios across one
+        set or the other.        
         """
         from scipy import stats        
         
-        ratios = [q['ratio'] for q in self.quantification.values()]
+        if samples:
+            ratios = [q['ratio'] for s,q in self.quantification.items() if s in samples]
+        else:    
+            ratios = [q['ratio'] for q in self.quantification.values()]
         
         # Filter out 0 and NaN        
         ratios = np.array([r for r in ratios if r != 0])
