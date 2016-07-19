@@ -107,7 +107,8 @@ def deseq_normalization(grouped_loci, show_plot=False):
     for locus in grouped_loci:
         for key,value in locus.locus_norm.items():
             ratios.setdefault(key,[]).append(value)
-    plt.boxplot(list(ratios.values()), labels=list(ratios.keys()))
+    if show_plot:
+        plt.boxplot(list(ratios.values()), labels=list(ratios.keys()))
     norm_factors = {sample:np.median(value) for sample, value in ratios.items()}
     for locus in grouped_loci:
         locus.normalize(norm_factors)

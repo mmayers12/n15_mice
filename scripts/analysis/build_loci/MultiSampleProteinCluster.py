@@ -10,9 +10,9 @@ import numpy as np
 def group_across_samples(protein_clusters, db_info=None):
     """Build loci from clustering groups across all samples
     accepts lists of build_loci.ProteinCluster"""
-    
-    protein_clusters = list(protein_clusters)    
-    
+
+    protein_clusters = list(protein_clusters)
+
     # test if all of the protein_clusters have the same db_info
     if db_info == None and len(set([tuple(x.db_info.items()) for x in protein_clusters])) == 1:
         # if so, use it. Otherwise, must pass it explicitly
@@ -23,10 +23,10 @@ def group_across_samples(protein_clusters, db_info=None):
     all_cluster_ids = set([x.cluster_id for x in protein_clusters])  # set of all clusters in this dataset
 
     if not MultiSampleProteinCluster.inited:
-        functionizer = Functionizer(protDB=db_info.protDB, domainDB=db_info.domainDB, hashDB=db_info.hashDB)    
+        functionizer = Functionizer(protDB=db_info.protDB, domainDB=db_info.domainDB, hashDB=db_info.hashDB)
         ncbi_taxonomy = taxonomy.Taxonomy(mongo_coll = db_info.ncbi_taxonomy)
         MultiSampleProteinCluster.init(ncbi_taxonomy = ncbi_taxonomy, functionizer = functionizer)
-    
+
     id_clusters = defaultdict(list)
     for x in protein_clusters:
         id_clusters[x.cluster_id].append(x)
@@ -41,7 +41,7 @@ def group_across_samples(protein_clusters, db_info=None):
         grouped_loci.append(MultiSampleProteinCluster(quantification=quantification, cluster_id=cluster_id,
                              cluster_peptides=cluster_peptides, cluster_prot_ids=cluster_prot_ids, db_info=db_info))
     return grouped_loci
-    
+
 class MultiSampleProteinCluster():
     """
     A ProteinCluster is built from group_across_samples based on clustering specified in clusterdb
@@ -49,14 +49,14 @@ class MultiSampleProteinCluster():
     cluster_peptides: Dict[Str:Dict[Str:Int]] -> {sample: {peptide: spectral_count}}
     cluster_prot_ids: protIDs that are supported by peptides in any sample (not necesarily all possible protIDs in this cluster)
     quantification:  {sample: value}, where value is the sum of all peptide spectral counts in that sample for peptides in cluster_peptides
-    
+
     Example:
     from metaproteomics.analysis.build_loci import ProteinCluster
-    ProteinCluster(cluster_id = 1, cluster_prot_ids = [1,2,3], 
-                   cluster_peptides = {'sampleA':{'aaa': {'counts':100, 'ratio':1.213, 'reg_fact': .8892}, 
+    ProteinCluster(cluster_id = 1, cluster_prot_ids = [1,2,3],
+                   cluster_peptides = {'sampleA':{'aaa': {'counts':100, 'ratio':1.213, 'reg_fact': .8892},
                                                   'bbb': {'counts':23, 'ratio':0.866, 'reg_fact': .9421},
                                        'sampleB':{'aaa': {'counts':101, 'ratio':1.271, 'reg_fact': .8747},
-                                                  'ccc': {'counts':123, 'ratio':3.741, 'reg_fact': .9548}}, 
+                                                  'ccc': {'counts':123, 'ratio':3.741, 'reg_fact': .9548}},
                    quantification = {'sampleA': {'counts': 123, 'ratio': 1.304},
                                      'sampleB': {'counts': 224, 'ratio': 2.560})
 
@@ -65,7 +65,7 @@ class MultiSampleProteinCluster():
     ncbi_taxonomy = None
     go_ontology = None
     inited = False
-    
+
     # attempting to make whats sets in init pickleable.
     # not quite working.....
     """
@@ -73,14 +73,14 @@ class MultiSampleProteinCluster():
         state = dict(self.__dict__)
         state['functionizer'] = self.functionizer
         state['go_ontology_name'] = self.obo_parser.__name__
-        state['ncbi_tax_host'] = 
-        state['ncbi_tax_port'] = 
+        state['ncbi_tax_host'] =
+        state['ncbi_tax_port'] =
         return state
-    
+
     def __setstate__(self, d):
         self.__dict__.update(d)
         obo_parser = __import__(state['go_ontology_name'])
-        
+
         MultiSampleProteinCluster.init(ncbi_taxonomy = taxonomy.Taxonomy(
                                                 host=state['ncbi_tax_host'], port=state['ncbi_tax_port']),
                                        functionizer = functionizer, go_ontology = obo_parser.GODag())
@@ -90,12 +90,12 @@ class MultiSampleProteinCluster():
         from ..functional_analysis import Functionizer
         from .. import taxonomy
         from ... import obo_parser
-        
+
         cls.ncbi_taxonomy = ncbi_taxonomy if ncbi_taxonomy else taxonomy.Taxonomy(host='wl-cmadmin', port=27017)
         cls.functionizer = functionizer if functionizer else Functionizer()
         cls.go_ontology = go_ontology if go_ontology else obo_parser.GODag()
         cls.inited = True
-    
+
     def __init__(self, cluster_id, cluster_peptides, cluster_prot_ids, quantification, db_info):
         if not MultiSampleProteinCluster.inited:
             MultiSampleProteinCluster.init()
@@ -104,43 +104,43 @@ class MultiSampleProteinCluster():
         self.cluster_prot_ids = cluster_prot_ids
         self.quantification = quantification
         self.db_info = db_info
-    
+
     def annotate(self):
         self.lookup_name()
         self.lookup_function()
         self.get_go()
         self.get_tax_info()
         self.quantify()
-    
+
     def quantify(self, samples=None):
         """
         Get average ratio and p-value from ratio t-test
         Ratio t-test: log-transform ratios, then t-test against 0
         samples: a subset of samples to quantify across e.g if both heavy and
         light samples included, it only makes sense to average ratios across one
-        set or the other.        
+        set or the other.
         """
-        from scipy import stats        
-        
+        from scipy import stats
+
         if samples:
             ratios = [q['ratio'] for s,q in self.quantification.items() if s in samples]
-        else:    
+        else:
             ratios = [q['ratio'] for q in self.quantification.values()]
-        
-        # Filter out 0 and NaN        
+
+        # Filter out 0 and NaN
         ratios = np.array([r for r in ratios if r != 0])
-        ratios = ratios[~np.isnan(ratios)] 
-        
+        ratios = ratios[~np.isnan(ratios)]
+
         log_ratios = np.log(ratios)
-        
+
         t, p = stats.ttest_1samp(log_ratios, 0)
-        
+
         self.avg_ratio = np.mean(ratios)
         self.p_value = p
-    
+
     # get a "representative" locus
     def lookup_name(self, all_prot_result=None):
-        
+
         if all_prot_result:
             prot_result = [all_prot_result[x] for x in self.cluster_prot_ids]
         else:
@@ -153,11 +153,11 @@ class MultiSampleProteinCluster():
         self.name = max([(p['s_len'],p['d']) for p in proteins], key=lambda x:x[0])[1]
         #Keep the full sequence of the winner
         self.seq = [x['s'] for x in prot_result if x['d'] == self.name][0]
-        
+
     def lookup_function(self):
         assert self.functionizer, "Must initialize functionizer"
         self.annotations = self.functionizer.get_annotations_from_protIDs(self.cluster_prot_ids)
-    
+
     def get_go(self):
         if "annotations" not in self.__dict__:
             self.lookup_function()
@@ -167,7 +167,7 @@ class MultiSampleProteinCluster():
         # These go terms aren't pickleble because of recursion.
         # TODO: fix this somehow?
         del self.go
-        
+
     def get_tax_info(self):
         # set tax_id, lca, lca_organism
         taxIDs_doc = list(self.db_info.taxDB.aggregate(
@@ -176,20 +176,20 @@ class MultiSampleProteinCluster():
         self.tax_id = [x for x in taxIDs_doc[0]['taxid'] if x] if taxIDs_doc else []
         self.lca = self.ncbi_taxonomy.LCA(self.tax_id)
         self.lca_organism = self.ncbi_taxonomy.taxid_to_taxonomy(self.lca)['scientific_name'] if self.lca else ''
-    
-    
+
+
     def __str__(self):
         return """Cluster ID: {cluster_id}\nQuantification: {q}\nGO Terms: {g}""".format(cluster_id=self.cluster_id, q=self.quantification, g=self.go_names)
-    
+
     def __repr__(self):
         return self.__dict__.__repr__()
-        
+
     def passes_thresh(self, metadata, min_quant = 2, ratio_ok = True, ratio_only = False, min_samples = 2, min_samples_per_group = 2, group = "biological"):
         """
         min_quant: Must have a minimum quantification of `min_quant` in at least one sample
         ratio_ok: Allow presence of a ratio, rather than `min_quant`, to allow threshold passing
         min_samples: Must have a minimum quantification of `min_quant` in at least `min_samples` samples
-        min_samples_per_group: Must be at least `min_samples_per_group` samples that are in the same group `group`, 
+        min_samples_per_group: Must be at least `min_samples_per_group` samples that are in the same group `group`,
                                 having a minimum quantification of `min_quant`
         """
 
@@ -204,7 +204,7 @@ class MultiSampleProteinCluster():
                 if not any(metadata[samples_that_pass].loc[group].value_counts() >= min_samples_per_group):
                     return False
             return True
-        
+
         if ratio_ok:
             num_ratios = (~np.isnan([x['ratio'] for x in self.quantification.values()])).sum()
             if num_ratios == 0:
@@ -227,16 +227,16 @@ class MultiSampleProteinCluster():
             if not any(metadata[samples_that_pass].loc[group].value_counts() >= min_samples_per_group):
                 return False
         return True
-    
+
     def as_dict(self):
         d = {}
         keys = ['prot_info','tax_id','lca','lca_organism','go','go_names','annotations','quantification',
                 'cluster_id','cluster_peptides','cluster_prot_ids','name','peptide_table','max_quant',
                 'crapome','seq','norm_quantification', 'avg_ratio', 'p_value']
-        for key in keys:                
+        for key in keys:
             if key in self.__dict__:
                 d[key] = self.__dict__[key]
         return d
-    
+
     def normalize(self, norm_factors, field = "norm_quantification"):
         self.__dict__[field] = {sample: value['counts']/norm_factors[sample] for sample,value in self.quantification.items()}
