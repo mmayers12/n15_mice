@@ -107,12 +107,29 @@ def make_line(folder, sample, N14 = True):
         line_d['comb_dta'] = np.nan
         line_d['census'] = np.nan
     return line_d
-#%%
+
+def get_category(row):
+    """
+    Categories:  Rag_Unenriched, RT_Unenriched, RAG_BioGlyCMK, RT_BioGlyCMK.
+    Others can be added later, but for the use of this study, these are the important ones.
+
+    Primary use of category will be for grouping in PCA plots.
+    """
+    if row['n15'] and not row['enriched']:
+        return 'RAG Unenriched'
+    elif not row['n15'] and not row['enriched']:
+        return 'RT Unenriched'
+    elif row['n15'] and row['probe'] == 'CMK':
+        return 'RAG BioGlyCMK'
+    elif not row['n15'] and row['probe'] == 'CMK':
+        return 'RT BioGlyCMK'
+    else:
+        return np.nan
+
 def main():
-#%%list(map(strip_date, folders))
     folders = sorted([x for x in os.listdir() if '201' in x])
     samples = list(map(strip_date, folders))
-#%%
+
     for sample in set(samples):
         i = 1
         while(sample in samples):
@@ -120,7 +137,7 @@ def main():
             samples[idx] = samples[idx]+'_'+str(i)
             i += 1
     metadata = []
-#%%
+
     for folder, sample in zip(folders, samples):
         if 'N14' in sample:
             metadata.append(make_line(folder,sample))
@@ -129,12 +146,12 @@ def main():
             sample = '_'.join(ssplt[:-1]) + '_n15_' + ssplt[-1]
             metadata.append(make_line(folder,sample, False))
 
-    #header = ',sample_type,enriched,probe,technical,col_date,run_date,n15,path'
-
+    # put the metadata into a csv
     metadata = pd.DataFrame(metadata)
     metadata = metadata.set_index('name')
+    metadata['category'] = metadata.apply(get_category, axis=1)
     metadata.to_csv('metadata.csv', index_label = '')
 
- #%%
+
 if __name__ == '__main__':
     main()

@@ -50,6 +50,12 @@ class ProteinCluster():
     def __repr__(self):
         return self.__dict__.__repr__()
 
+    def __eq__(self, other):
+        return self.cluster_id == other.cluster_id
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
     def lookup_name(self):
         # pick the largest protein in one of dbs: ['RefSeq','UniProt*', 'HMP_Reference_Genomes']
         return get_good_name(self.cluster_prot_ids, self.sample.db_info.protDB)

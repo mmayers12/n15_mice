@@ -35,7 +35,7 @@ from pymongo import MongoClient
 from collections import defaultdict
 
 class Functionizer:
-    
+
     # So we can pickle a Functionizer instance
     def __getstate__(self):
         state = dict(self.__dict__)
@@ -46,15 +46,15 @@ class Functionizer:
         state['domainDB_tuple'] = self.domainDB.database.client.address + (self.domainDB.database.name,self.domainDB.name)
         state['hashDB_tuple'] = self.hashDB.database.client.address + (self.hashDB.database.name,self.hashDB.name)
         return state
-    
+
     def __setstate__(self, d):
         self.__dict__.update(d)
         self.protDB = Functionizer.mongoclient_builder(d['protDB_tuple'])
         self.domainDB = Functionizer.mongoclient_builder(d['domainDB_tuple'])
         self.hashDB = Functionizer.mongoclient_builder(d['hashDB_tuple'])
-        
+
     def __init__(self, protDB=None, domainDB=None, hashDB=None):
-        """ Accepts mongo collection objects 
+        """ Accepts mongo collection objects
         protDB is only needed to look up protein sequences to hash them, if hashDB is not provided
         domainDB contains interproscan info indexed by protein sequence md5sum
         hashDB: protDB ids <-> md5sum
@@ -74,7 +74,7 @@ class Functionizer:
         self.domainDB = domainDB
         self.hashDB = hashDB
 
-    
+
     @staticmethod
     def mongoclient_builder(db_info_tuple):
         return MongoClient(host=db_info_tuple[0], port=db_info_tuple[1])[db_info_tuple[2]][db_info_tuple[3]]
@@ -82,7 +82,7 @@ class Functionizer:
     def compute_hashes(self, protIDs):
         # If you don't have a hashDB, for getting hashes of proteins by computing md5sum
         return set(hashlib.md5(d['s'].encode('utf-8')).hexdigest() for d in self.protDB.find({'_id': {'$in': list(protIDs)}}))
-    
+
     def get_hashes(self, protIDs):
         return set(x['_id'] for x in self.hashDB.find({'pID': {'$in': list(protIDs)}}, {'_id': True}))
 
@@ -90,7 +90,7 @@ class Functionizer:
         # return set of all go_terms for all domains in list of hashes
         domain_list = self.get_domains_from_hashes(list(hashes))
         return set(chain(*[set(chain(*[x['g'] for x in chain(*[x for x in values.values()]) if 'g' in x])) for values in domain_list]))
-    
+
     def get_domains_from_hashes(self, hashes):
         return [x['d'] for x in self.domainDB.find({'_id': {'$in': list(hashes)}})]
     """ test
@@ -99,19 +99,19 @@ class Functionizer:
     f.get_annotations_from_protIDs(list(range(10)))
 
     """
-    
+
     def get_annotations_from_protIDs(self, protIDs, from_db=[], return_ipa=True, return_go=True):
         """
         If `from_db` is empty, use all member databases.
         `from_db` is a list of strings. for example `['pfam','superfamily']`
-        
+
         If `from_db` is given, the GO and/or IPA accessions returned will be only from the databases in `from_db`
-        
+
         Annotations are returned as a dictionary
         """
         hashes = self.get_hashes(protIDs)
         domain_result = self.get_domains_from_hashes(hashes)
-    
+
         if from_db:
             from_db = [x.lower() for x in from_db]
             # Get only the domains from dbs in from_db
@@ -119,12 +119,12 @@ class Functionizer:
         else:
             # Get all annotations from any dbs
             pass
-    
+
         # Collapse db : domains dict into list of domains
         domain_list = list(chain(*[list(chain(*x.values())) for x in domain_result]))
         if not domain_list:
             return {}
-        
+
         annotations = defaultdict(set)
         if return_ipa:
             _ipa = set([domain['ipa'] for domain in domain_list if 'ipa' in domain])
@@ -136,14 +136,14 @@ class Functionizer:
             if 'sa' in domain:
                 annotations[domain['a']].add(domain['sa'])
         return dict(annotations)
-        
+
     def pfam_info(self, pfams):
         from ..interproscan import pfam_sets
         if "pfam_dict" not in self.__dict__:
             self.pfam_dict = pfam_sets.parse_pfam_clans()
         return {x:self.pfam_dict[x]['name'] for x in pfams}
-        
-    
+
+
 def get_go_set_parent(p):
     # Get the most common set of GO terms for the parent loci only
     parent_hashes = [x['_id'] for x in hashDB.find({'pID': {'$in': p['parent_forward_loci']}}, {'_id': True})]

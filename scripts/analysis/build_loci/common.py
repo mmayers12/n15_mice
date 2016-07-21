@@ -267,7 +267,7 @@ def to_df(protein_clusters, norm=True, ratios=False, peptides=False, nf=None):
         return pd.DataFrame(peptides)
 
     # Grab Locus Quantifications    
-    if norm:
+    if norm and not ratios:
         return pd.DataFrame({x.cluster_id:x.norm_quantification for x in protein_clusters}).fillna(0)
     else:
         loci = defaultdict(dict)

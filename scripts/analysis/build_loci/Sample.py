@@ -108,23 +108,35 @@ class Sample(dict):
         forward_peptides = set(chain(*[x['unmod_peptide_seq'] for x in self.dta_select if not x['reverse']]))
         summary.Peptides.Forward = len(forward_peptides)
         summary.Peptides.Filtered = summary.Peptides.Decoy + summary.Peptides.Forward
-        summary.Peptides.FDR = 100 * summary.Peptides.Decoy / summary.Peptides.Forward
+        if summary.Peptides.Forward > 0:
+            summary.Peptides.FDR = 100 * summary.Peptides.Decoy / summary.Peptides.Forward
+        else:
+            summary.Peptides.FDR = -1
 
         summary.Proteins.Decoy = len([x for x in self.dta_select if x['reverse']])
         summary.Proteins.Forward = len([x for x in self.dta_select if not x['reverse']])
         summary.Proteins.Filtered = summary.Proteins.Decoy + summary.Proteins.Forward
-        summary.Proteins.FDR = 100 * summary.Proteins.Decoy / summary.Proteins.Forward
+        if summary.Proteins.Forward > 0:            
+            summary.Proteins.FDR = 100 * summary.Proteins.Decoy / summary.Proteins.Forward
+        else:
+            summary.Proteins.FDR = -1
 
         if self['quant']:
             summary.Spectra.Decoy = sum(self.pep_quant[peptide]['c_spec'] for peptide in decoy_peptides)
             summary.Spectra.Forward = sum(self.pep_quant[peptide]['c_spec'] for peptide in forward_peptides)
             summary.Spectra.Filtered = summary.Spectra.Decoy + summary.Spectra.Forward
-            summary.Spectra.FDR = 100 * summary.Spectra.Decoy / summary.Spectra.Forward
+            if summary.Spectra.Forward > 0:            
+                summary.Spectra.FDR = 100 * summary.Spectra.Decoy / summary.Spectra.Forward
+            else:
+                summary.Spectra.FDR = -1
         else:
             summary.Spectra.Decoy = sum(self.pep_quant[peptide] for peptide in decoy_peptides)
             summary.Spectra.Forward = sum(self.pep_quant[peptide] for peptide in forward_peptides)
             summary.Spectra.Filtered = summary.Spectra.Decoy + summary.Spectra.Forward
-            summary.Spectra.FDR = 100 * summary.Spectra.Decoy / summary.Spectra.Forward
+            if summary.Spectra.Forward > 0:
+                summary.Spectra.FDR = 100 * summary.Spectra.Decoy / summary.Spectra.Forward
+            else:
+                summary.Spectra.FDR = -1
 
         return summary
 

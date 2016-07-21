@@ -26,7 +26,7 @@ def clean_df(df):
     
 
 
-def plot_pca(df, metadata, group_name = 'sample_type', loc=3, title='PCA of Protein Clusters', out = 'pca', save = False, label_points = False):
+def plot_pca(df, metadata, group_name = 'sample_type', loc=3, title='PCA of Protein Clusters', out = 'pca', save = False, label_points = False, legend_title=False):
     """
     Needs dataframe with samples as row and features as columns and corresponding
     metadata with samples as row and column with categorical variable for grouping.
@@ -43,7 +43,6 @@ def plot_pca(df, metadata, group_name = 'sample_type', loc=3, title='PCA of Prot
     PLOT_PCS = tuple([1, 2])        
     NUM_PCS = max(PLOT_PCS)
 
-    metadata = metadata.T
     df = clean_df(df)
     X_scaled = pd.DataFrame(preprocessing.scale(df), index=df.index, columns = df.columns)
     pca = PCA(n_components=NUM_PCS)
@@ -67,7 +66,9 @@ def plot_pca(df, metadata, group_name = 'sample_type', loc=3, title='PCA of Prot
                     textcoords = 'offset points', ha = 'right', va = 'bottom',
                     arrowprops = dict(arrowstyle = '-', connectionstyle = 'arc3,rad=0'))
 
-    plt.legend(loc=loc,title=GROUP)
+    plt.legend(loc=loc)
+    if legend_title:
+        plt.legend(loc=loc, title=legend_title)
     plt.title(title, size=20)
     plt.xlabel("PC{0}: {1:.2f}%".format(PLOT_PCS[0], pca.explained_variance_ratio_[PLOT_PCS[0]-1]*100), size=16)
     plt.ylabel("PC{0}: {1:.2f}%".format(PLOT_PCS[1], pca.explained_variance_ratio_[PLOT_PCS[1]-1]*100), size=16)
