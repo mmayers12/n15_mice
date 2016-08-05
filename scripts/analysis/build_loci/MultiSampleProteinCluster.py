@@ -7,10 +7,16 @@ import numpy as np
 
 
 
-def group_across_samples(protein_clusters, db_info=None):
+def group_across_samples(protein_clusters, sample_pep_quant, sample_quant_dict=None, db_info=None):
     """Build loci from clustering groups across all samples
     accepts lists of build_loci.ProteinCluster"""
 
+    # sample_pep_quant: dict of {'sample_name': {'pep': quant}}
+    # can be built like: sample_pep_quant = {sample.sample_name:sample.pep_quant for sample in samples.values()}
+    # build sample_quant_dict like this: sample_quant_dict = {sample: data['n15'] for sample, data in samples.items()}
+    # where samples is a dict of {sample_name: build_loci.Sample}
+    
+    sample_names = set(sample_pep_quant.keys())
     protein_clusters = list(protein_clusters)
 
     # test if all of the protein_clusters have the same db_info
@@ -35,12 +41,94 @@ def group_across_samples(protein_clusters, db_info=None):
     for cluster_id in all_cluster_ids:
         # the ProteinClusters across all samples for this cluster_id
         this_clusters = id_clusters[cluster_id]
-        cluster_peptides = {x.sample_name: x.peptide_quant for x in this_clusters}
-        quantification = {x.sample_name:x.quantification for x in this_clusters}
+
+
+        #cluster_peptides = {x.sample_name: x.peptide_quant for x in this_clusters}
+        #quantification = {x.sample_name:x.quantification for x in this_clusters}
+
+
+        
+        peptide_seq = set(chain(*[x.peptide_seq for x in this_clusters]))
+        cluster_peptides = dict()
+        for sample_name in sample_names:
+            pep_quant = {pep:ratio_pep_quant(sample_pep_quant[sample_name][pep], sample_quant_dict[sample_name]) 
+                                             for pep in peptide_seq if pep in sample_pep_quant[sample_name]}
+            if pep_quant:
+                cluster_peptides[sample_name] = pep_quant
+        
+        quantification = {sample_name:ratio_prot_quant(pep_quant) for sample_name,pep_quant in cluster_peptides.items()}
+        
+
         cluster_prot_ids = set(chain(*[x.cluster_prot_ids for x in this_clusters]))
         grouped_loci.append(MultiSampleProteinCluster(quantification=quantification, cluster_id=cluster_id,
                              cluster_peptides=cluster_peptides, cluster_prot_ids=cluster_prot_ids, db_info=db_info))
     return grouped_loci
+
+
+def ratio_pep_quant(pep, n15):
+    # Columns with important quant info
+    if n15:
+        cols = ['rev_slope_ratio', 'regression_factor', 'h_spec']
+    else:
+        cols = ['ratio', 'regression_factor', 'l_spec']
+
+    # Regularize column names across n14 and n15 samples
+    new_cols = ['ratio', 'reg_fact', 'counts']
+    quant = pep[cols].rename({o:n for o, n in zip(cols, new_cols)}).to_dict()
+
+    # If there is no ratio do a ratio of specs... but add 5 to both
+    # to reduce importance low count ratios e.g 2:1 or 1:0 or 2:0
+    if np.isnan(quant['ratio']):
+        quant['ratio'] = (5+pep['l_spec']) / (5+pep['h_spec'])
+        quant['reg_fact'] = 0
+        if n15:
+            quant['ratio'] = 1/quant['ratio']
+    
+    # Back Calc counts from ratio
+    # n15 back_counts = n14counts * n15_ratio AND n14_backCounts = n14Counts
+    # if no n14 counts, n15 back_counts = n15 coutns, and n14_back_counts = n15Counts * n14_ratio
+    if n15:
+        quant['back_calc'] = pep['l_spec'] * quant['ratio']
+        if quant['back_calc'] == 0:
+            quant['back_calc'] = pep['h_spec']
+    else:
+        quant['back_calc'] = pep['l_spec']
+        if quant['back_calc'] == 0:
+            quant['back_calc'] = pep['h_spec'] * quant['ratio']
+        
+
+    return quant
+
+
+def ratio_prot_quant(peptide_quant):
+
+    # extract peptide quant values
+    ratios = [q['ratio'] for q in peptide_quant.values()]
+    counts = [q['counts'] for q in peptide_quant.values()]
+    reg_facts = [q['reg_fact'] for q in peptide_quant.values()]
+
+    # Get aggergate quant values
+    num = sum([r*f for r, f in zip(ratios, reg_facts)])
+    denom = sum(reg_facts)
+    tot_counts = sum(counts)
+
+    # If no census ratios, but spec counts are high, might be able to
+    # infer a ratio from these
+    if denom == 0:
+        if tot_counts > 5:
+            # Solves for l+h spec eqn: ratio = this_spec+5 / other_spec+5
+            weights = [ (((c+5)/r)-5)+c for c,r in zip(counts, ratios)]
+            num = sum([w*r for w,r in zip(weights,ratios)])
+            denom = sum(weights)
+        else:
+            num, denom = (np.nan, np.nan)
+
+    # get weighted ratio for protein
+    ratio = num/denom
+
+
+    return {'ratio' : ratio, 'counts': tot_counts}
+
 
 class MultiSampleProteinCluster():
     """

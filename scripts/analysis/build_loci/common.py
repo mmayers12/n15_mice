@@ -135,7 +135,7 @@ def format_qdict(qdict):
         for seqName, seqDict in sampDict.items():
             for qType, qVal in seqDict.items():
                 reform[(sampName, qType)].update({seqName:qVal})
-    return pd.DataFrame(reform).fillna(0)
+    return pd.DataFrame(reform).fillna(0).drop('back_calc', axis=1)
 
 
 def get_sig_df(grouped_clusters, fc_cutoff=4, p_val_cutoff=.05, up_only=False, down_only=False):
