@@ -106,11 +106,13 @@ def ratio_prot_quant(peptide_quant):
     ratios = [q['ratio'] for q in peptide_quant.values()]
     counts = [q['counts'] for q in peptide_quant.values()]
     reg_facts = [q['reg_fact'] for q in peptide_quant.values()]
+    back_calcs = [q['back_calc'] for q in peptide_quant.values()]
 
     # Get aggergate quant values
     num = sum([r*f for r, f in zip(ratios, reg_facts)])
     denom = sum(reg_facts)
     tot_counts = sum(counts)
+    tot_back_calc = sum(back_calcs)
 
     # If no census ratios, but spec counts are high, might be able to
     # infer a ratio from these
@@ -127,7 +129,7 @@ def ratio_prot_quant(peptide_quant):
     ratio = num/denom
 
 
-    return {'ratio' : ratio, 'counts': tot_counts}
+    return {'ratio' : ratio, 'counts': tot_counts, 'back_calc': tot_back_calc}
 
 
 class MultiSampleProteinCluster():
