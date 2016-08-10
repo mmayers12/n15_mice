@@ -1,0 +1,342 @@
+---
+title: "topGO"
+author: "Mike"
+date: "August 9, 2016"
+output: html_document
+---
+
+## Load data
+```{r, results="hide", message=FALSE, warning=FALSE}
+library(topGO)
+library(knitr)
+```
+```{r}
+data.dir <- '../data'
+gene2GOID <- readMappings(file.path(data.dir, 'clusterID2GO.map'))
+unenr_pvals <- read.csv(file.path(data.dir, 'unenriched_pvals.csv'))
+unenr_pvals$log2FoldChange <- log2(unenr_pvals$ratio)
+kable(head(unenr_pvals))
+```
+```{r, results="hide", message=FALSE, warning=FALSE}
+GO2geneMF <- annFUN.gene2GO('MF', gene2GO=gene2GOID)
+GO2geneBP <- annFUN.gene2GO('BP', gene2GO=gene2GOID)
+```
+
+```{r}
+sampleTable <- read.csv(file.path(data.dir, 'filt_metadata.csv'), row.names=1)
+sampleTable$technical <- as.logical(sampleTable$technical)
+kable(head(sampleTable))
+```
+```{r}
+locusTable <- read.csv(file.path(data.dir, 'loci_annot.csv'))
+kable(head(locusTable))
+```
+
+# Start by looking at human and mouse proteins only
+```{r}
+mh.prots <- locusTable[locusTable$mouse_human == 'True',]$X
+mh.pvals <- unenr_pvals[unenr_pvals$X %in% mh.prots, ]
+
+mh.pvals.up <- mh.pvals[mh.pvals$log2FoldChange > 0, ]
+geneList.mh.up <- mh.pvals.up$p_value
+names(geneList.mh.up) <- mh.pvals.up$X
+
+mh.pvals.down <- mh.pvals[mh.pvals$log2FoldChange < 0, ]
+geneList.mh.down <- mh.pvals.down$p_value
+names(geneList.mh.down) <- mh.pvals.down$X
+```
+
+## Molecular Function
+```{r, results="hide", message=FALSE, warning=FALSE}
+ontology <- 'MF'
+topDiffGenes <- function(score) {return(abs(score) < 0.01)}
+```
+
+### Enriched in R-Tcell
+```{r, results="hide", message=FALSE, warning=FALSE}
+GOdata.mh.mf.up <- new('topGOdata', ontology = ontology, allGenes = geneList.mh.up, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.mh.mf.up.fisher <- runTest(GOdata.mh.mf.up, statistic = 'fisher')
+result.mh.mf.up.ks <- runTest(GOdata.mh.mf.up, statistic = 'ks')
+```
+
+```{r}
+kable(GenTable(GOdata.mh.mf.up, result.mh.mf.up.fisher, topNodes = 10))
+kable(GenTable(GOdata.mh.mf.up, result.mh.mf.up.ks, topNodes = 10))
+```
+
+### Enriched in RAG
+```{r, results="hide", message=FALSE, warning=FALSE}
+GOdata.mh.mf.down <- new('topGOdata', ontology = ontology, allGenes = geneList.mh.down, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.mh.mf.down.fisher <- runTest(GOdata.mh.mf.down, statistic = 'fisher')
+result.mh.mf.down.ks <- runTest(GOdata.mh.mf.down, statistic = 'ks')
+```
+
+```{r kable}
+kable(GenTable(GOdata.mh.mf.down, result.mh.mf.down.fisher, topNodes = 10))
+kable(GenTable(GOdata.mh.mf.down, result.mh.mf.down.ks, topNodes = 10))
+```
+
+
+## Biological Processes
+```{r}
+ontology <- 'BP'
+```
+
+### Enriched in R-Tcell
+```{r, results="hide", message=FALSE, warning=FALSE}
+GOdata.mh.bp.up <- new('topGOdata', ontology = ontology, allGenes = geneList.mh.up, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.mh.bp.up.fisher <- runTest(GOdata.mh.bp.up, statistic = 'fisher')
+result.mh.bp.up.ks <- runTest(GOdata.mh.bp.up, statistic = 'ks')
+```
+
+```{r}
+kable(GenTable(GOdata.mh.bp.up, result.mh.bp.up.fisher, topNodes = 10))
+kable(GenTable(GOdata.mh.bp.up, result.mh.bp.up.ks, topNodes = 10))
+```
+
+### Enriched in RAG
+```{r, results="hide", message=FALSE, warning=FALSE}
+GOdata.mh.bp.down <- new('topGOdata', ontology = ontology, allGenes = geneList.mh.down, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.mh.bp.down.fisher <- runTest(GOdata.mh.bp.down, statistic = 'fisher')
+result.mh.bp.down.ks <- runTest(GOdata.mh.bp.down, statistic = 'ks')
+```
+```{r}
+kable(GenTable(GOdata.mh.bp.down, result.mh.bp.down.fisher, topNodes = 10))
+kable(GenTable(GOdata.mh.bp.down, result.mh.bp.down.ks, topNodes = 10))
+```
+
+
+
+# Now for bacterial proteins only
+LCA # 35823 corresponds to Anthrospira, which is only present to food, so will filter this out as well
+```{r, results="hide", message=FALSE, warning=FALSE}
+tmp <- locusTable$mouse_human == 'False' & locusTable$lca != '35823' 
+tmp[is.na(tmp)] <- TRUE
+bac.prots <- locusTable[tmp, ]$X
+bac.pvals <- unenr_pvals[unenr_pvals$X %in% bac.prots, ]
+```
+
+```{r, results="hide", message=FALSE, warning=FALSE}
+bac.pvals.up <- bac.pvals[bac.pvals$log2FoldChange > 0, ]
+geneList.bac.up <- bac.pvals.up$p_value
+names(geneList.bac.up) <- bac.pvals.up$X
+```
+
+```{r, results="hide", message=FALSE, warning=FALSE}
+bac.pvals.down <- bac.pvals[bac.pvals$log2FoldChange < 0, ]
+geneList.bac.down <- bac.pvals.down$p_value
+names(geneList.bac.down) <- bac.pvals.down$X
+```
+
+## Molecular Function
+```{r, results="hide", message=FALSE, warning=FALSE}
+ontology <- 'MF'
+```
+### Enriched in RTcell
+```{r, results="hide", message=FALSE, warning=FALSE}
+GOdata.bac.mf.up <- new('topGOdata', ontology = ontology, allGenes = geneList.bac.up, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.bac.mf.up.fisher <- runTest(GOdata.bac.mf.up, statistic = 'fisher')
+result.bac.mf.up.ks <- runTest(GOdata.bac.mf.up, statistic = 'ks')
+```
+```{r}
+kable(GenTable(GOdata.bac.mf.up, result.bac.mf.up.fisher, topNodes = 10))
+kable(GenTable(GOdata.bac.mf.up, result.bac.mf.up.ks, topNodes = 10))
+```
+
+### Enriched in RAG
+```{r, results="hide", message=FALSE, warning=FALSE}
+GOdata.bac.mf.down <- new('topGOdata', ontology = ontology, allGenes = geneList.bac.down, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.bac.mf.down.fisher <- runTest(GOdata.bac.mf.down, statistic = 'fisher')
+result.bac.mf.down.ks <- runTest(GOdata.bac.mf.down, statistic = 'ks')
+```
+```{r}
+kable(GenTable(GOdata.bac.mf.down, result.bac.mf.down.fisher, topNodes = 10))
+kable(GenTable(GOdata.bac.mf.down, result.bac.mf.down.ks, topNodes = 10))
+```
+
+
+## Biological Process
+```{r, results="hide", message=FALSE, warning=FALSE}
+ontology <- 'BP'
+```
+### Enriched in RTcell
+```{r, results="hide", message=FALSE, warning=FALSE}
+GOdata.bac.bp.up <- new('topGOdata', ontology = ontology, allGenes = geneList.bac.up, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.bac.bp.up.fisher <- runTest(GOdata.bac.bp.up, statistic = 'fisher')
+result.bac.bp.up.ks <- runTest(GOdata.bac.bp.up, statistic = 'ks')
+```
+```{r}
+kable(GenTable(GOdata.bac.bp.up, result.bac.bp.up.fisher, topNodes = 10))
+kable(GenTable(GOdata.bac.bp.up, result.bac.bp.up.ks, topNodes = 10))
+```
+
+### Enriched in RAG
+```{r, results="hide", message=FALSE, warning=FALSE}
+GOdata.bac.bp.down <- new('topGOdata', ontology = ontology, allGenes = geneList.bac.down, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.bac.bp.down.fisher <- runTest(GOdata.bac.bp.down, statistic = 'fisher')
+result.bac.bp.down.ks <- runTest(GOdata.bac.bp.down, statistic = 'ks')
+```
+```{r}
+kable(GenTable(GOdata.bac.bp.down, result.bac.bp.down.fisher, topNodes = 10))
+kable(GenTable(GOdata.bac.bp.down, result.bac.bp.down.ks, topNodes = 10))
+```
+
+
+
+
+
+# BioGlyCMK Enriched Samples
+```{r}
+enr_pvals <- read.csv(file.path(data.dir, 'enriched_pvals.csv'))
+enr_pvals$log2FoldChange <- log2(enr_pvals$ratio)
+kable(head(enr_pvals))
+```
+
+# Human and mouse only
+```{r}
+mh.prots <- locusTable[locusTable$mouse_human == 'True',]$X
+mh.pvals <- enr_pvals[enr_pvals$X %in% mh.prots, ]
+
+mh.pvals.up <- mh.pvals[mh.pvals$log2FoldChange > 0, ]
+geneList.mh.up <- mh.pvals.up$p_value
+names(geneList.mh.up) <- mh.pvals.up$X
+
+mh.pvals.down <- mh.pvals[mh.pvals$log2FoldChange < 0, ]
+geneList.mh.down <- mh.pvals.down$p_value
+names(geneList.mh.down) <- mh.pvals.down$X
+```
+
+## Molecular Function
+```{r, results="hide", message=FALSE, warning=FALSE}
+ontology <- 'MF'
+topDiffGenes <- function(score) {return(abs(score) < 0.01)}
+```
+
+### Enriched in R-Tcell
+```{r, results="hide", message=FALSE, warning=FALSE}
+GOdata.mh.mf.up <- new('topGOdata', ontology = ontology, allGenes = geneList.mh.up, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.mh.mf.up.fisher <- runTest(GOdata.mh.mf.up, statistic = 'fisher')
+result.mh.mf.up.ks <- runTest(GOdata.mh.mf.up, statistic = 'ks')
+```
+
+```{r}
+kable(GenTable(GOdata.mh.mf.up, result.mh.mf.up.fisher, topNodes = 10))
+kable(GenTable(GOdata.mh.mf.up, result.mh.mf.up.ks, topNodes = 10))
+```
+
+### Enriched in RAG
+```{r, results="hide", message=FALSE, warning=FALSE}
+GOdata.mh.mf.down <- new('topGOdata', ontology = ontology, allGenes = geneList.mh.down, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.mh.mf.down.fisher <- runTest(GOdata.mh.mf.down, statistic = 'fisher')
+result.mh.mf.down.ks <- runTest(GOdata.mh.mf.down, statistic = 'ks')
+```
+
+```{r}
+kable(GenTable(GOdata.mh.mf.down, result.mh.mf.down.fisher, topNodes = 10))
+kable(GenTable(GOdata.mh.mf.down, result.mh.mf.down.ks, topNodes = 10))
+```
+
+
+## Biological Processes
+```{r}
+ontology <- 'BP'
+```
+
+### Enriched in R-Tcell
+```{r, results="hide", message=FALSE, warning=FALSE}
+GOdata.mh.bp.up <- new('topGOdata', ontology = ontology, allGenes = geneList.mh.up, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.mh.bp.up.fisher <- runTest(GOdata.mh.bp.up, statistic = 'fisher')
+result.mh.bp.up.ks <- runTest(GOdata.mh.bp.up, statistic = 'ks')
+```
+
+```{r}
+kable(GenTable(GOdata.mh.bp.up, result.mh.bp.up.fisher, topNodes = 10))
+kable(GenTable(GOdata.mh.bp.up, result.mh.bp.up.ks, topNodes = 10))
+```
+
+### Enriched in RAG
+```{r, results="hide", message=FALSE, warning=FALSE}
+GOdata.mh.bp.down <- new('topGOdata', ontology = ontology, allGenes = geneList.mh.down, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.mh.bp.down.fisher <- runTest(GOdata.mh.bp.down, statistic = 'fisher')
+result.mh.bp.down.ks <- runTest(GOdata.mh.bp.down, statistic = 'ks')
+```
+```{r}
+kable(GenTable(GOdata.mh.bp.down, result.mh.bp.down.fisher, topNodes = 10))
+kable(GenTable(GOdata.mh.bp.down, result.mh.bp.down.ks, topNodes = 10))
+```
+
+
+
+# Now for bacterial proteins only
+LCA # 35823 corresponds to Anthrospira, which is only present to food, so will filter this out as well
+```{r, results="hide", message=FALSE, warning=FALSE}
+tmp <- locusTable$mouse_human == 'False' & locusTable$lca != '35823' 
+tmp[is.na(tmp)] <- TRUE
+bac.prots <- locusTable[tmp, ]$X
+bac.pvals <- enr_pvals[enr_pvals$X %in% bac.prots, ]
+```
+
+```{r, results="hide", message=FALSE, warning=FALSE}
+bac.pvals.up <- bac.pvals[bac.pvals$log2FoldChange > 0, ]
+geneList.bac.up <- bac.pvals.up$p_value
+names(geneList.bac.up) <- bac.pvals.up$X
+```
+
+```{r, results="hide", message=FALSE, warning=FALSE}
+bac.pvals.down <- bac.pvals[bac.pvals$log2FoldChange < 0, ]
+geneList.bac.down <- bac.pvals.down$p_value
+names(geneList.bac.down) <- bac.pvals.down$X
+```
+
+## Molecular Function
+```{r, results="hide", message=FALSE, warning=FALSE}
+ontology <- 'MF'
+```
+### Enriched in RTcell
+```{r, results="hide", message=FALSE, warning=FALSE}
+GOdata.bac.mf.up <- new('topGOdata', ontology = ontology, allGenes = geneList.bac.up, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.bac.mf.up.fisher <- runTest(GOdata.bac.mf.up, statistic = 'fisher')
+result.bac.mf.up.ks <- runTest(GOdata.bac.mf.up, statistic = 'ks')
+```
+```{r}
+kable(GenTable(GOdata.bac.mf.up, result.bac.mf.up.fisher, topNodes = 10))
+kable(GenTable(GOdata.bac.mf.up, result.bac.mf.up.ks, topNodes = 10))
+```
+
+### Enriched in RAG
+```{r, results="hide", message=FALSE, warning=FALSE}
+GOdata.bac.mf.down <- new('topGOdata', ontology = ontology, allGenes = geneList.bac.down, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.bac.mf.down.fisher <- runTest(GOdata.bac.mf.down, statistic = 'fisher')
+result.bac.mf.down.ks <- runTest(GOdata.bac.mf.down, statistic = 'ks')
+```
+```{r}
+kable(GenTable(GOdata.bac.mf.down, result.bac.mf.down.fisher, topNodes = 10))
+kable(GenTable(GOdata.bac.mf.down, result.bac.mf.down.ks, topNodes = 10))
+```
+
+
+## Biological Process
+```{r, results="hide", message=FALSE, warning=FALSE}
+ontology <- 'BP'
+```
+### Enriched in RTcell
+```{r, results="hide", message=FALSE, warning=FALSE}
+GOdata.bac.bp.up <- new('topGOdata', ontology = ontology, allGenes = geneList.bac.up, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.bac.bp.up.fisher <- runTest(GOdata.bac.bp.up, statistic = 'fisher')
+result.bac.bp.up.ks <- runTest(GOdata.bac.bp.up, statistic = 'ks')
+```
+```{r}
+kable(GenTable(GOdata.bac.bp.up, result.bac.bp.up.fisher, topNodes = 10))
+kable(GenTable(GOdata.bac.bp.up, result.bac.bp.up.ks, topNodes = 10))
+```
+
+### Enriched in RAG
+```{r, results="hide", message=FALSE, warning=FALSE}
+GOdata.bac.bp.down <- new('topGOdata', ontology = ontology, allGenes = geneList.bac.down, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.bac.bp.down.fisher <- runTest(GOdata.bac.bp.down, statistic = 'fisher')
+result.bac.bp.down.ks <- runTest(GOdata.bac.bp.down, statistic = 'ks')
+```
+```{r}
+kable(GenTable(GOdata.bac.bp.down, result.bac.bp.down.fisher, topNodes = 10))
+kable(GenTable(GOdata.bac.bp.down, result.bac.bp.down.ks, topNodes = 10))
+```
