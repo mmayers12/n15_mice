@@ -99,13 +99,13 @@ def plot_volcano(grouped_loci, fc_cutoff=4, p_val_cutoff=.05, labels=False, titl
     # Plot the points
     fig = plt.figure(figsize=(15, 9))
     fig.set_tight_layout(False)
-    plt.scatter(X, Y, c = df['passes'], s=50, cmap='bwr', alpha=.5)
+    plt.scatter(X, Y, c = df['passes'], s=50, cmap='Paired')
     
     if labels:
         texts = []
         for name, x, y in zip(df['gene_name'],X, Y):
             if abs(x) > np.log2(fc_cutoff) and y > -1*np.log10(p_val_cutoff) and name != '' and name != 'Amy2':
-                texts.append(plt.text(x, y, name, size = 12, weight='heavy'))
+                texts.append(plt.text(x, y, name, size = 12, weight='extra bold'))
                 
 
     
