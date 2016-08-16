@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from scripts.analysis import build_loci
-
+from adjustText import adjust_text
 
 def clean_df(df):
     # You lose about 90% of peptides if you just drop empty ones.
@@ -80,6 +80,7 @@ def plot_pca(df, metadata, group_name = 'sample_type', loc=3, title='PCA of Prot
 
 
 def plot_volcano(grouped_loci, fc_cutoff=4, p_val_cutoff=.05, labels=False, title='Volcano Plot'):
+    import seaborn as sns
     sns.set_style('whitegrid')    
 
     # This code should probably be somewhere else
@@ -98,12 +99,14 @@ def plot_volcano(grouped_loci, fc_cutoff=4, p_val_cutoff=.05, labels=False, titl
     # Plot the points
     fig = plt.figure(figsize=(15, 9))
     fig.set_tight_layout(False)
-    plt.scatter(X, Y, c = df['passes'], s=50, cmap='bwr')
+    plt.scatter(X, Y, c = df['passes'], s=50, cmap='bwr', alpha=.5)
     
     if labels:
+        texts = []
         for name, x, y in zip(df['gene_name'],X, Y):
-            if abs(x) > np.log2(fc_cutoff) and y > -1*np.log10(p_val_cutoff):
-                plt.annotate(name, xy = (x, y), xytext = (5, 5), textcoords = 'offset points', arrowprops = dict(arrowstyle = '-', connectionstyle = 'arc3,rad=0'))
+            if abs(x) > np.log2(fc_cutoff) and y > -1*np.log10(p_val_cutoff) and name != '' and name != 'Amy2':
+                texts.append(plt.text(x, y, name, size = 12, weight='heavy'))
+                
 
     
     # Plot asjustments
@@ -113,3 +116,5 @@ def plot_volcano(grouped_loci, fc_cutoff=4, p_val_cutoff=.05, labels=False, titl
     plt.xticks(size=12)
     plt.yticks(size=12)
     plt.ylim(bottom=-0.2);
+    if labels:
+        adjust_text(texts, arrowprops=dict(arrowstyle="-", color='k', lw=0.5))
