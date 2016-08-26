@@ -1,5 +1,8 @@
 library(topGO)
 library(stats)
+library(knitr)
+
+
 setwd('/Users/mmayers/projects/n15_mice/data/')
 
 data.dir <- '../data'
@@ -19,69 +22,14 @@ unenr_pvals[unenr_pvals$padj > .05 & abs(unenr_pvals$log2FoldChange) > 2, ]$adjF
 hist(unenr_pvals$log2FoldChange, 15)
 hist(unenr_pvals$adjFC, 15)
 
-
+# Metadata on Cluster Info - Use this for filtering of certain types of proteins
 sampleTable <- read.csv(file.path(data.dir, 'filt_metadata.csv'), row.names=1)
 sampleTable$technical <- as.logical(sampleTable$technical)
 locusTable <- read.csv(file.path(data.dir, 'loci_annot.csv'))
 
 
-# Start by looking at human and mouse proteins only
-mh.prots <- locusTable[locusTable$mouse_human == 'True',]$X
-mh.pvals <- unenr_pvals[unenr_pvals$X %in% mh.prots, ]
-geneList.mh <- mh.pvals$p_value
-geneList.mh <- mh.pvals$adjFC
-names(geneList.mh) <- mh.pvals$X
-
-
-
-mh.pvals.up <- mh.pvals[mh.pvals$log2FoldChange >= 0, ]
-geneList.mh.up <- mh.pvals.up$p_value
-names(geneList.mh.up) <- mh.pvals.up$X
-
-mh.pvals.down <- mh.pvals[mh.pvals$log2FoldChange < 0, ]
-geneList.mh.down <- mh.pvals.down$p_value
-names(geneList.mh.down) <- mh.pvals.down$X
-
-geneList.mh.updown <- c(geneList.mh.down * -1, geneList.mh.up)
-
-
-ontology <- 'MF'
-topDiffGenes <- function(score) {return(score < 0.01)}
-
-geneList.mh  <- -1*geneList.mh
-
-GOdata.mh <- new('topGOdata', ontology = ontology, allGenes = geneList.mh, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
-result.mh.fisher <- runTest(GOdata.mh, statistic = 'fisher')
-result.mh.ks <- runTest(GOdata.mh, statistic = 'ks')
-GenTable(GOdata.mh, result.mh.fisher, topNodes = 10)
-GenTable(GOdata.mh, result.mh.ks, topNodes = 10)
-
-GOdata.mh.up <- new('topGOdata', ontology = ontology, allGenes = geneList.mh.up, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
-result.mh.up.fisher <- runTest(GOdata.mh.up, statistic = 'fisher')
-result.mh.up.ks <- runTest(GOdata.mh.up, statistic = 'ks')
-GenTable(GOdata.mh.up, result.mh.up.fisher, topNodes = 10)
-GenTable(GOdata.mh.up, result.mh.up.ks, topNodes = 10)
-
-GOdata.mh.down <- new('topGOdata', ontology = ontology, allGenes = geneList.mh.down, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
-result.mh.down.fisher <- runTest(GOdata.mh.down, statistic = 'fisher')
-result.mh.down.ks <- runTest(GOdata.mh.down, statistic = 'ks')
-GenTable(GOdata.mh.down, result.mh.down.fisher, topNodes = 10)
-GenTable(GOdata.mh.down, result.mh.down.ks, topNodes = 10)
-
-
-geneList.mh.updown <- -1*geneList.mh.updown
-
-GOdata.mh.updown <- new('topGOdata', ontology = ontology, allGenes = geneList.mh.updown, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
-result.mh.updown.fisher <- runTest(GOdata.mh.updown, statistic = 'fisher')
-result.mh.updown.ks <- runTest(GOdata.mh.updown, statistic = 'ks')
-GenTable(GOdata.mh.updown, result.mh.updown.fisher, topNodes = 10)
-GenTable(GOdata.mh.updown, result.mh.updown.ks, topNodes = 10)
-
-
-
-
-
-# Now for bacterial proteins only
+# Look at Bacterial Proteins only (Mouse Human subset seems to be a bust, can't figure out
+# good way to account for tiny background)
 tmp <- locusTable$mouse_human == 'False' & locusTable$lca != '35823' # Filtering out anthrospira differences 35823
 tmp[is.na(tmp)] <- TRUE
 bac.prots <- locusTable[tmp, ]$X
@@ -90,46 +38,39 @@ geneList.bac <- bac.pvals$padj
 geneList.bac <- bac.pvals$adjFC
 names(geneList.bac) <- bac.pvals$X
 
-bac.pvals.up <- bac.pvals[bac.pvals$log2FoldChange > 0, ]
-geneList.bac.up <- bac.pvals.up$p_value
-names(geneList.bac.up) <- bac.pvals.up$X
+topDiffGenes <- function(score) {return(score >= 2)} # scoring function, anything with > 2 logfc is sig anyway
 
-bac.pvals.down <- bac.pvals[bac.pvals$log2FoldChange < 0, ]
-geneList.bac.down <- bac.pvals.down$p_value
-names(geneList.bac.down) <- bac.pvals.down$X
-
-geneList.bac.updown <- c(geneList.bac.down * -1, geneList.bac.up)
-
-
-## Look at what's inside 
-ontology <- 'MF'
-
+## Look at what's inside Tcell vs RAG
 geneList.bac <- -1*geneList.bac
 
+ontology <- 'MF'
 GOdata.bac <- new('topGOdata', ontology = ontology, allGenes = geneList.bac, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
-result.bac.fisher <- runTest(GOdata.bac, statistic = 'fisher')
 result.bac.ks <- runTest(GOdata.bac, statistic = 'ks')
-GenTable(GOdata.bac, result.bac.fisher, topNodes = 10)
+GenTable(GOdata.bac, result.bac.ks, topNodes = 10)
+showGroupDensity(GOdata.bac, "GO:0008184", ranks=TRUE) #Glycogen phosphorlase
+showGroupDensity(GOdata.bac, "GO:0004618", ranks=TRUE) #phosphoglycerate kinase
+
+ontology <- 'BP'
+GOdata.bac <- new('topGOdata', ontology = ontology, allGenes = geneList.bac, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.bac.ks <- runTest(GOdata.bac, statistic = 'ks')
+GenTable(GOdata.bac, result.bac.ks, topNodes = 10)
+showGroupDensity(GOdata.bac, "GO:0006096", ranks=TRUE) # Glycolitc Process
+showGroupDensity(GOdata.bac, "GO:0005975", ranks=TRUE) # Carbohydydrate metab
+# Mostly Carb metabolism?  lipid biosynthesis?Nah, those look crappy
+
+# RAG vs Tcell
+geneList.bac <- -1*geneList.bac
+
+ontology <- 'MF'
+GOdata.bac <- new('topGOdata', ontology = ontology, allGenes = geneList.bac, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.bac.ks <- runTest(GOdata.bac, statistic = 'ks')
 GenTable(GOdata.bac, result.bac.ks, topNodes = 10)
 
-GOdata.bac.up <- new('topGOdata', ontology = ontology, allGenes = geneList.bac.up, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
-result.bac.up.fisher <- runTest(GOdata.bac.up, statistic = 'fisher')
-result.bac.up.ks <- runTest(GOdata.bac.up, statistic = 'ks')
-GenTable(GOdata.bac.up, result.bac.up.fisher, topNodes = 10)
-GenTable(GOdata.bac.up, result.bac.up.ks, topNodes = 10)
-
-GOdata.bac.down <- new('topGOdata', ontology = ontology, allGenes = geneList.bac.down, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
-result.bac.down.fisher <- runTest(GOdata.bac.down, statistic = 'fisher')
-result.bac.down.ks <- runTest(GOdata.bac.down, statistic = 'ks')
-GenTable(GOdata.bac.down, result.bac.down.fisher, topNodes = 10)
-GenTable(GOdata.bac.down, result.bac.down.ks, topNodes = 10)
-
-geneList.bac.updown <- -1 * geneList.bac.updown
-
-GOdata.bac.updown <- new('topGOdata', ontology = ontology, allGenes = geneList.bac.updown, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
-result.bac.updown.fisher <- runTest(GOdata.bac.updown, statistic = 'fisher')
-result.bac.updown.ks <- runTest(GOdata.bac.updown, statistic = 'ks')
-GenTable(GOdata.bac.updown, result.bac.updown.ks, topNodes = 10)
+ontology <- 'BP'
+GOdata.bac <- new('topGOdata', ontology = ontology, allGenes = geneList.bac, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.bac.ks <- runTest(GOdata.bac, statistic = 'ks')
+GenTable(GOdata.bac, result.bac.ks, topNodes = 10)
+showGroupDensity(GOdata.bac, "GO:0005978", ranks=TRUE) #Glycogen biosynthetic process
 
 
 #BioGlyCMK Rag vs Tcell
@@ -152,34 +93,35 @@ geneList.bac.enr <- bac.enr.pvals$adjFC
 names(geneList.bac.enr) <- bac.enr.pvals$X
 
 ## Look at what's inside 
-ontology <- 'MF'
 
 # Tcell vs RAG
 geneList.bac.enr <- -1*geneList.bac.enr # KS goes from - to +
                                         # do this to put upreg in Tcell first
-
-GOdata.bac <- new('topGOdata', ontology = ontology, allGenes = geneList.bac, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
-result.bac.ks <- runTest(GOdata.bac, statistic = 'ks')
-GenTable(GOdata.bac, result.bac.ks, topNodes = 10)
+ontology <- 'MF'
+GOdata.bac.enr <- new('topGOdata', ontology = ontology, allGenes = geneList.bac.enr, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.bac.enr.ks <- runTest(GOdata.bac.enr, statistic = 'ks')
+GenTable(GOdata.bac.enr, result.bac.enr.ks, topNodes = 10)
 
 ontology <- 'BP'
-GOdata.bac <- new('topGOdata', ontology = ontology, allGenes = geneList.bac, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
-result.bac.ks <- runTest(GOdata.bac, statistic = 'ks')
-GenTable(GOdata.bac, result.bac.ks, topNodes = 10)
+GOdata.bac.enr <- new('topGOdata', ontology = ontology, allGenes = geneList.bac.enr, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.bac.enr.ks <- runTest(GOdata.bac.enr, statistic = 'ks')
+GenTable(GOdata.bac.enr, result.bac.enr.ks, topNodes = 10)
+showGroupDensity(GOdata.bac.enr, "GO:0006508", ranks = TRUE) #proteolysis
 
 # RAG vs TCell
 ontology <- 'MF'
 geneList.bac.enr <- -1*geneList.bac.enr 
 
-GOdata.bac <- new('topGOdata', ontology = ontology, allGenes = geneList.bac, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
-result.bac.ks <- runTest(GOdata.bac, statistic = 'ks')
-GenTable(GOdata.bac, result.bac.ks, topNodes = 10)
+GOdata.bac.enr <- new('topGOdata', ontology = ontology, allGenes = geneList.bac.enr, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.bac.enr.ks <- runTest(GOdata.bac.enr, statistic = 'ks')
+GenTable(GOdata.bac.enr, result.bac.enr.ks, topNodes = 10)
 
 ontology <- 'BP'
-GOdata.bac <- new('topGOdata', ontology = ontology, allGenes = geneList.bac, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
-result.bac.ks <- runTest(GOdata.bac, statistic = 'ks')
-GenTable(GOdata.bac, result.bac.ks, topNodes = 10)
-
+GOdata.bac.enr <- new('topGOdata', ontology = ontology, allGenes = geneList.bac.enr, geneSel = topDiffGenes, annot = annFUN.gene2GO, gene2GO = gene2GOID)
+result.bac.enr.ks <- runTest(GOdata.bac.enr, statistic = 'ks')
+GenTable(GOdata.bac.enr, result.bac.enr.ks, topNodes = 10)
+showGroupDensity(GOdata.bac.enr, "GO:0006091", ranks=TRUE) #generation of precursor metabolites
+showGroupDensity(GOdata.bac.enr, "GO:0006090", ranks=TRUE) # pyruvate metabolic process
 
 
 
@@ -192,9 +134,10 @@ geneList.rt.enr <- groups.rt$RT_Enriched == 'True' & groups.rt$RT_Unenriched == 
 geneList.rt.enr <- as.numeric(geneList.rt.enr)
 names(geneList.rt.enr) <- groups.rt$X
 
+sigFunc <- function(score) {return(score > 0.5)}
+
 ontology <- 'MF'
 
-sigFunc <- function(score) {return(score > 0.5)}
 GOdata.rt.enr <- new('topGOdata', ontology = ontology, allGenes = geneList.rt.enr, geneSel = sigFunc, annot = annFUN.gene2GO, gene2GO = gene2GOID)
 result.rt.enr.fisher <- runTest(GOdata.rt.enr, statistic = 'fisher')
 GenTable(GOdata.rt.enr, result.rt.enr.fisher, topNodes = 10)
