@@ -47,12 +47,14 @@ def get_corrval(fname):
             return math.exp(float(head[1]))
     return 1
 
-def parse_file(fname, norm = True):
+def parse_file(fname, norm = True, enrichment = False):
     """Read through the original file, split into P and S files"""
 
     import math
     
     colnames = get_colnames(fname)
+    if enrichment:
+        colnames['SLINE'] = colnames['SLINE'][:-1]
 
     p_out, s_out, sand_out = [], [], []
     p_id = get_id()
@@ -70,8 +72,9 @@ def parse_file(fname, norm = True):
                 make_new_id = True
 
                 if line.startswith("S"):
-                    vals = line.split("\t")
-                    line = "\t".join(vals[:-6] + vals[-2:])
+                    if not enrichment:
+                        vals = line.split("\t")
+                        line = "\t".join(vals[:-6] + vals[-2:])
 
                 out = sand_out if line.startswith("&") else s_out
 
@@ -79,20 +82,18 @@ def parse_file(fname, norm = True):
 
 
     # read into pandas
-    p_table = (pd
-        .read_csv(StringIO(''.join(p_out)), sep = '\t', names = colnames["PLINE"])
-        .dropna(axis = 1, how = "all")
-        .reset_index()
-    )
+    p_table = (pd.read_csv(StringIO(''.join(p_out)), sep = '\t', names = colnames["PLINE"])
+                 .dropna(axis = 1, how = "all")
+                 .reset_index())
 
-    s_table = (pd
-        .read_csv(StringIO(''.join(s_out)), sep = '\t', names = colnames["SLINE"])
-        .reset_index()
-    )
-    sand_table = (pd
-        .read_csv(StringIO(''.join(sand_out)), sep = '\t', names = colnames["&SLINE"])
-        .reset_index()
-    )
+    s_table = (pd.read_csv(StringIO(''.join(s_out)), sep = '\t', names = colnames["SLINE"])
+                 .reset_index())
+
+    if enrichment:
+        return (p_table, s_table)
+
+    sand_table = (pd.read_csv(StringIO(''.join(sand_out)), sep = '\t', names = colnames["&SLINE"])
+                    .reset_index())
 
     s_table = pd.concat([s_table, sand_table]).reset_index(drop=True)
 
