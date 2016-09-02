@@ -83,15 +83,9 @@ def plot_volcano(grouped_loci, fc_cutoff=4, p_val_cutoff=.05, labels=False, titl
     import seaborn as sns
     sns.set_style('whitegrid')    
 
-    # This code should probably be somewhere else
-    def get_gene_name(r):
-        if r['name'].find('GN=') > 0:
-            return r['name'][r['name'].index('GN=')+3:].split(' ')[0]
-        else:
-            return ''
-    
+
     df = build_loci.get_sig_df(grouped_loci, fc_cutoff=fc_cutoff, p_val_cutoff=p_val_cutoff)
-    df['gene_name'] = df.apply(get_gene_name, axis=1)
+    df['gene_name'] = df['name'].apply(build_loci.get_gene_name)
     
     X = df['logfc'].values
     Y = df['-logp'].values

@@ -276,7 +276,28 @@ def to_df(protein_clusters, norm=True, ratios=False, peptides=False, nf=None):
             for samp, values in pc.quantification.items():
                 loci[pc.cluster_id].update({samp: values[q_factor]})        
         return pd.DataFrame(loci)
-        
+
+def get_gene_name(r):
+    if r.find('GN=') > 0:
+        return r[r.index('GN=')+3:].split(' ')[0]
+    else:
+        return ''
+
+def get_genus(r):
+    if r.find('OS=') > 0:
+        return r[r.index('OS=')+3:].split(' ')[0]
+    else:
+        return ''
+
+def get_annotation_df(grouped_loci):
+
+    loci = dict()
+    for locus in grouped_loci:
+        loci[locus.cluster_id] = {'gn': get_gene_name(locus.name), 'lca': locus.lca, 'name': locus.name,
+                                  'mouse_human': (locus.lca in [10090, 9606] or get_genus(locus.name) in ['Mus', 'Homo'])}
+        loci[locus.cluster_id].update({})
+    return pd.DataFrame(loci).T        
+
     
 def is_good_db(s):
     # ['RefSeq','UniProt*', 'HMP_Reference_Genomes']

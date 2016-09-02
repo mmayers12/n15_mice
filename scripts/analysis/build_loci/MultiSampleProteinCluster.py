@@ -56,9 +56,22 @@ def group_across_samples(protein_clusters, sample_pep_quant, sample_quant_dict=N
             if pep_quant:
                 cluster_peptides[sample_name] = pep_quant
         
-        quantification = {sample_name:ratio_prot_quant(pep_quant) for sample_name,pep_quant in cluster_peptides.items()}
-        
-
+        quantification = {sample_name:ratio_prot_quant(pep_quant) for sample_name,pep_quant 
+                                in cluster_peptides.items() if len(pep_quant) > 1}
+                                
+        # Sometimes a sample doesn't have enough peptides, but the pair does.  If the pair
+        # also has a good ratio, take that and use the inverse to quantify.
+        for smp in cluster_peptides.keys():
+            if not smp in quantification.keys():
+                ssplit = smp.split('_')                
+                if sample_quant_dict[smp]: # N15 so remove the _N_
+                    name = '_'.join(ssplit[:-2]) + '_' + ssplit[-1]                    
+                else: # N14 so add the _N_
+                    name = '_'.join(ssplit[:-1]) + '_N_' + ssplit[-1]
+                if name in quantification and not np.isnan(quantification[name]['ratio']):
+                    quantification[smp] = {'ratio': 1/quantification[name]['ratio'], 'counts': 0}
+                    quantification[smp]['back_calc'] = quantification[smp]['ratio'] * quantification[name]['counts']
+         
         cluster_prot_ids = set(chain(*[x.cluster_prot_ids for x in this_clusters]))
         grouped_loci.append(MultiSampleProteinCluster(quantification=quantification, cluster_id=cluster_id,
                              cluster_peptides=cluster_peptides, cluster_prot_ids=cluster_prot_ids, db_info=db_info))
