@@ -293,10 +293,10 @@ def get_annotation_df(grouped_loci):
 
     loci = dict()
     for locus in grouped_loci:
-        loci[locus.cluster_id] = {'gn': get_gene_name(locus.name), 'lca': locus.lca, 'name': locus.name,
+        loci[locus.cluster_id] = {'gn': get_gene_name(locus.name), 'os': get_genus(locus.name), 'lca': locus.lca, 'name': locus.name,
                                   'mouse_human': (locus.lca in [10090, 9606] or get_genus(locus.name) in ['Mus', 'Homo'])}
         loci[locus.cluster_id].update({})
-    return pd.DataFrame(loci).T        
+    return pd.DataFrame(loci).T[['gn', 'os', 'lca', 'mouse_human', 'name']]        
 
     
 def is_good_db(s):
