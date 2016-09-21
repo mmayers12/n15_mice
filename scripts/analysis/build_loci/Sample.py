@@ -149,6 +149,15 @@ class Sample(dict):
     def make_ratio_quant(self, n15):
         """
         Get the quantifications for the sample from the ratio info
+        
+        Since some peptides may have been seen multiple times, either by charge
+        state or by modification, we will determine the weighted average for this
+        ratio.  This functions to prevent different versions of the same peptide
+        as being counted for being counted for the 2 peptides per protein minimum.
+        This simultaneously will result in regression factors greater than one
+        for some peptides.  This is OK, since the weighted average for these 
+        peptides will be averaged with other weighted averages resulting in 
+        correct quantificaiton for the overall protein.
         """
 
         self.pep_quant['weighted'] = self.pep_quant['ratio'] * self.pep_quant['regression_factor']
@@ -156,12 +165,14 @@ class Sample(dict):
         new = self.pep_quant.groupby(level=0)[['l_spec','h_spec','c_spec', 'add_spec']].sum()
 
         # New ratio = sum(ratio*regression_factor) / sum(regression_factor)
+        # Keep sum(regression) factor for peptide for future quantification
+        # to reflect the fact that this value is already an average.
         new[['ratio', 'rev_slope_ratio', 'regression_factor']] = (self.pep_quant
                 .query('type == "S"')
                 .dropna()
                 .groupby(level=0)[['weighted', 'weighted_rev', 'regression_factor']]
                 .sum())
-
+    
         new['ratio'] = new['ratio'] / new['regression_factor']
         new['rev_slope_ratio'] = new['rev_slope_ratio'] / new['regression_factor']
 
