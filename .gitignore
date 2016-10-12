@@ -1,5 +1,9 @@
 # Project specifc ignores
 data
+*test*
+*.svg
+*.png
+*.json
 
 ###
 ### Boilerplate Python Project ignores
