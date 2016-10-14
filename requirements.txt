@@ -2,6 +2,7 @@ adjustText==0.5.2
 appnope==0.1.0
 backports-abc==0.4
 backports.shutil-get-terminal-size==1.0.0
+beautifulsoup4==4.5.1
 cycler==0.10.0
 decorator==4.0.10
 dill==0.2.5
@@ -9,6 +10,7 @@ entrypoints==0.2.2
 fisher==0.1.5
 gnureadline==6.3.3
 goatools==0.6.5
+gseapy==0.6.0
 ipykernel==4.3.1
 ipython==4.2.0
 ipython-genutils==0.1.0
@@ -40,6 +42,7 @@ python-dateutil==2.5.3
 pytz==2016.4
 pyzmq==15.2.0
 qtconsole==4.2.1
+requests==2.11.1
 scikit-learn==0.17.1
 scipy==0.17.1
 seaborn==0.7.1
