@@ -139,13 +139,17 @@ def format_qdict(qdict):
     return pd.DataFrame(reform).fillna(0)
 
 
-def get_sig_df(grouped_clusters, fc_cutoff=4, p_val_cutoff=.05, up_only=False, down_only=False):
+def get_sig_df(grouped_clusters, fc_cutoff=4, p_val_cutoff=.05, up_only=False, down_only=False, drop=True):
     dat = dict()
     for i, pc in enumerate(grouped_clusters):
         dat[i] = {'p_value': pc.p_value, 'avg_ratio': pc.avg_ratio, 'name': pc.name, 'id':pc.cluster_id}
-    df = pd.DataFrame.from_dict(dat, orient='index').dropna(subset=['avg_ratio', 'p_value'])
     
-    # Take the 
+    df = pd.DataFrame.from_dict(dat, orient='index')
+    
+    if drop:
+        df = df.dropna(subset=['avg_ratio', 'p_value'])
+    
+    # Take the log values
     df['-logp'] = -1*np.log10(df['p_value'])
     df['logfc'] = np.log2(df['avg_ratio'])
     
@@ -294,9 +298,13 @@ def get_annotation_df(grouped_loci):
     loci = dict()
     for locus in grouped_loci:
         loci[locus.cluster_id] = {'gn': get_gene_name(locus.name), 'os': get_genus(locus.name), 'lca': locus.lca, 'name': locus.name,
-                                  'mouse_human': (locus.lca in [10090, 9606] or get_genus(locus.name) in ['Mus', 'Homo'])}
+                                  'mouse_human': (locus.lca in [10090, 9606] or get_genus(locus.name) in ['Mus', 'Homo']), 
+                                  'spir': any(['Arthrospira' in inf['d'] for inf in locus.prot_info]), 
+                                  'go': ','.join([go for go in locus.annotations.get('go', '')]),
+                                  'sym': locus.short_name}
+                                  
         loci[locus.cluster_id].update({})
-    return pd.DataFrame(loci).T[['gn', 'os', 'lca', 'mouse_human', 'name']]        
+    return pd.DataFrame(loci).T[['gn', 'os', 'lca', 'mouse_human', 'spir', 'name', 'sym', 'go']]        
 
     
 def is_good_db(s):

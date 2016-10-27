@@ -59,7 +59,7 @@ class Functionizer:
         domainDB contains interproscan info indexed by protein sequence md5sum
         hashDB: protDB ids <-> md5sum
         """
-        default_client = MongoClient('wl-cmadmin', 27018)
+        default_client = MongoClient('wl-cmadmin.scripps.edu', 27018)
         if not protDB:
             protDB = default_client.ProtDB_072114.ProtDB_072114
         if not domainDB:
