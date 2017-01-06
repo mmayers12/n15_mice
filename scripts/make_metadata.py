@@ -89,17 +89,17 @@ def make_line(folder, sample, N14 = True):
     # N14 and path
     if N14:
         line_d['n15'] = False
-        line_d['path'] = os.path.join(BASE, folder, "rawXtractor/dta-pfp-0.01/DTASelect-filter.txt")
+        line_d['path'] = os.path.join(BASE, folder, "14n-search", '_'.join([date, "14n", "DTASelect-filter.txt"]))
     else:
         line_d['n15'] = True
-        line_d['path'] = os.path.join(BASE, folder, "rawXtractor/n15_search/dta-pfp-0.01/DTASelect-filter.txt")
+        line_d['path'] = os.path.join(BASE, folder, "15n-search", '-'.join([date, "15n", "DTASelect-filter.txt"]))
     # Determine if its an N14 N15 mix file for quant, and if so store paired DTA output
     if 'N14N15' in folder:
         line_d['quant'] = True
-        line_d['l_dta'] = os.path.join(BASE, folder, "rawXtractor/dta-pfp-0.01/DTASelect-filter.txt")
-        line_d['h_dta'] = os.path.join(BASE, folder, "rawXtractor/n15_search/dta-pfp-0.01/DTASelect-filter.txt")
-        line_d['comb_dta'] = os.path.join(BASE, folder, "rawXtractor/combined_search/DTASelect-filter.txt")
-        line_d['census'] = os.path.join(BASE, folder, "rawXtractor/combined_search/census-out.txt")
+        line_d['l_dta'] = os.path.join(BASE, folder, "14n-search", '-'.join([date, "14n", "DTASelect-filter.txt"]))
+        line_d['h_dta'] = os.path.join(BASE, folder, "15n-search", '-'.join([date, "15n", "DTASelect-filter.txt"]))
+        line_d['comb_dta'] = os.path.join(BASE, folder, "census-result", '-'.join([date, "census", "DTASelect-filter.txt"]))
+        line_d['census'] = os.path.join(BASE, folder, "census-result", '-'.join([date, "census-out.txt"]))
     else:
         line_d['quant'] = False
         line_d['l_dta'] = np.nan
